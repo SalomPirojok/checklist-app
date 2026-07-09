@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
+import AssignChecklistModal from '../components/AssignChecklistModal';
 
 export default function TemplatesPage() {
     const api = useApiClient();
@@ -8,6 +9,8 @@ export default function TemplatesPage() {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [assigningTemplate, setAssigningTemplate] = useState(null);
+    const [assignedMessage, setAssignedMessage] = useState(null);
 
     async function load() {
         setLoading(true);
@@ -36,6 +39,11 @@ export default function TemplatesPage() {
         }
     }
 
+    function handleAssigned() {
+        setAssignedMessage(`Чек-лист «${assigningTemplate.title}» назначен.`);
+        setAssigningTemplate(null);
+    }
+
     return (
         <div className="page">
             <div className="page-header">
@@ -45,6 +53,7 @@ export default function TemplatesPage() {
                 </button>
             </div>
 
+            {assignedMessage && <p className="success-text">{assignedMessage}</p>}
             {loading && <p>Загрузка...</p>}
             {error && <p className="error-text">{error}</p>}
 
@@ -60,6 +69,15 @@ export default function TemplatesPage() {
                                 {template.description && <div className="hint">{template.description}</div>}
                             </div>
                             <div className="list-row__actions">
+                                <button
+                                    className="btn btn--ghost"
+                                    onClick={() => {
+                                        setAssignedMessage(null);
+                                        setAssigningTemplate(template);
+                                    }}
+                                >
+                                    Назначить
+                                </button>
                                 <button className="btn btn--ghost btn--danger" onClick={() => handleArchive(template)}>
                                     Архивировать
                                 </button>
@@ -67,6 +85,14 @@ export default function TemplatesPage() {
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {assigningTemplate && (
+                <AssignChecklistModal
+                    template={assigningTemplate}
+                    onClose={() => setAssigningTemplate(null)}
+                    onAssigned={handleAssigned}
+                />
             )}
         </div>
     );

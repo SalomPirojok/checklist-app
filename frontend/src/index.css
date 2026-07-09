@@ -62,6 +62,11 @@ body {
     font-size: 15px;
 }
 
+.success-text {
+    color: var(--status-good);
+    font-size: 15px;
+}
+
 .spinner {
     width: 32px;
     height: 32px;
