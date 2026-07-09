@@ -23,6 +23,10 @@ export function AuthProvider({ children }) {
             try {
                 WebApp.ready();
                 WebApp.expand();
+                // Telegram's native vertical swipe-to-close gesture otherwise steals
+                // touch-move gestures from in-page elements (e.g. the signature pad),
+                // so drawing a signature silently fails to register on a real device.
+                WebApp.disableVerticalSwipes();
             } catch {
                 // WebApp calls are safe no-ops outside a real Telegram client; ignore.
             }
