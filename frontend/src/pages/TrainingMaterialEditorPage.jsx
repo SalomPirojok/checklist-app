@@ -91,7 +91,7 @@ export default function TrainingMaterialEditorPage() {
                 </label>
 
                 <label className="field">
-                    <span>Вложение (фото, видео или PDF, необязательно)</span>
+                    <span>Вложение (фото, видео, PDF или документ, необязательно)</span>
                     {existingFileUrl && !removeExistingFile && !newFile && (
                         <div className="hint">
                             Текущий файл прикреплён.{' '}
@@ -104,7 +104,7 @@ export default function TrainingMaterialEditorPage() {
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/*,video/mp4,video/quicktime,video/webm,application/pdf"
+                        accept="image/*,video/mp4,video/quicktime,video/webm,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.txt,text/plain"
                         onChange={handleFileChange}
                     />
                 </label>

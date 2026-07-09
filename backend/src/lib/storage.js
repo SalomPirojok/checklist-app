@@ -24,6 +24,9 @@ const TRAINING_BUCKET_OPTIONS = {
         'video/quicktime',
         'video/webm',
         'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
     ],
 };
 

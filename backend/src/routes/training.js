@@ -18,6 +18,9 @@ const MIME_EXTENSIONS = {
     'video/quicktime': 'mov',
     'video/webm': 'webm',
     'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'text/plain': 'txt',
 };
 
 const upload = multer({
