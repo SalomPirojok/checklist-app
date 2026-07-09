@@ -24,6 +24,7 @@ function normalizeItems(items, templateId) {
         title: item.title,
         description: item.description || null,
         requires_photo: !!item.requires_photo,
+        category: item.category || null,
         order_index: item.order_index ?? index,
     }));
 }
@@ -167,7 +168,7 @@ router.post('/:id/items', async (req, res) => {
     }
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const { title, description, requires_photo, order_index } = req.body || {};
+    const { title, description, requires_photo, category, order_index } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title is required' });
 
     let nextOrderIndex = order_index;
@@ -189,6 +190,7 @@ router.post('/:id/items', async (req, res) => {
             title,
             description: description || null,
             requires_photo: !!requires_photo,
+            category: category || null,
             order_index: nextOrderIndex,
         })
         .select()
@@ -241,11 +243,12 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     }
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const { title, description, requires_photo, order_index } = req.body || {};
+    const { title, description, requires_photo, category, order_index } = req.body || {};
     const updates = {};
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description;
     if (requires_photo !== undefined) updates.requires_photo = !!requires_photo;
+    if (category !== undefined) updates.category = category || null;
     if (order_index !== undefined) updates.order_index = order_index;
 
     if (Object.keys(updates).length === 0) {

@@ -2,6 +2,7 @@ import { supabase } from './supabase.js';
 
 const CHECKLIST_BUCKET = 'checklist-photos';
 const ATTENDANCE_BUCKET = 'attendance-photos';
+const SIGNATURE_BUCKET = 'checklist-signatures';
 
 const PHOTO_BUCKET_OPTIONS = {
     public: true,
@@ -90,4 +91,20 @@ export async function verifyAttendancePhotoBelongsToUser(photoUrl, userId) {
 
     const filename = objectPath.slice(expectedFolder.length);
     return photoExistsAtPath(ATTENDANCE_BUCKET, userId, filename);
+}
+
+export async function uploadSignaturePhoto({ assignmentId, buffer, contentType, extension }) {
+    const path = `${assignmentId}/signature-${Date.now()}.${extension}`;
+    return uploadPhoto(SIGNATURE_BUCKET, path, buffer, contentType);
+}
+
+export async function verifySignatureBelongsToAssignment(photoUrl, assignmentId) {
+    const objectPath = extractBucketRelativePath(photoUrl, SIGNATURE_BUCKET);
+    if (!objectPath) return false;
+
+    const expectedFolder = `${assignmentId}/`;
+    if (!objectPath.startsWith(expectedFolder)) return false;
+
+    const filename = objectPath.slice(expectedFolder.length);
+    return photoExistsAtPath(SIGNATURE_BUCKET, assignmentId, filename);
 }

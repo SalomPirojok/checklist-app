@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
+import { buildDisplaySegments } from '../utils/groupByCategory';
 
-const emptyItem = () => ({ title: '', description: '', requires_photo: false });
+const emptyItem = () => ({ title: '', description: '', requires_photo: false, category: '' });
 
 export default function TemplateEditorPage() {
     const api = useApiClient();
@@ -31,6 +32,7 @@ export default function TemplateEditorPage() {
                               title: item.title,
                               description: item.description || '',
                               requires_photo: item.requires_photo,
+                              category: item.category || '',
                           }))
                         : [emptyItem()]
                 );
@@ -60,7 +62,7 @@ export default function TemplateEditorPage() {
 
         const cleanItems = items
             .filter((item) => item.title.trim())
-            .map((item, index) => ({ ...item, order_index: index }));
+            .map((item, index) => ({ ...item, category: item.category.trim() || null, order_index: index }));
 
         if (cleanItems.length === 0) {
             setError('Добавьте хотя бы один пункт с названием.');
@@ -99,6 +101,41 @@ export default function TemplateEditorPage() {
 
     if (loading) return <p>Загрузка...</p>;
 
+    const indexedItems = items.map((item, index) => ({ ...item, __index: index }));
+    const segments = buildDisplaySegments(indexedItems, (item) => item.category?.trim());
+
+    function renderItemRow(item) {
+        const index = item.__index;
+        return (
+            <div className="item-row" key={index}>
+                <input
+                    type="text"
+                    placeholder="Пункт чек-листа"
+                    value={item.title}
+                    onChange={(e) => updateItem(index, { title: e.target.value })}
+                />
+                <input
+                    type="text"
+                    placeholder="Категория (необязательно)"
+                    className="item-row__category"
+                    value={item.category}
+                    onChange={(e) => updateItem(index, { category: e.target.value })}
+                />
+                <label className="checkbox-field">
+                    <input
+                        type="checkbox"
+                        checked={item.requires_photo}
+                        onChange={(e) => updateItem(index, { requires_photo: e.target.checked })}
+                    />
+                    <span>Фото обязательно</span>
+                </label>
+                <button type="button" className="btn btn--ghost btn--danger" onClick={() => removeItem(index)}>
+                    Удалить
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="page">
             <h1>{isNew ? 'Новый шаблон' : 'Редактирование шаблона'}</h1>
@@ -113,27 +150,16 @@ export default function TemplateEditorPage() {
                 </label>
 
                 <h2>Пункты</h2>
-                {items.map((item, index) => (
-                    <div className="item-row" key={index}>
-                        <input
-                            type="text"
-                            placeholder="Пункт чек-листа"
-                            value={item.title}
-                            onChange={(e) => updateItem(index, { title: e.target.value })}
-                        />
-                        <label className="checkbox-field">
-                            <input
-                                type="checkbox"
-                                checked={item.requires_photo}
-                                onChange={(e) => updateItem(index, { requires_photo: e.target.checked })}
-                            />
-                            <span>Фото обязательно</span>
-                        </label>
-                        <button type="button" className="btn btn--ghost btn--danger" onClick={() => removeItem(index)}>
-                            Удалить
-                        </button>
-                    </div>
-                ))}
+                {segments.map((segment, segIndex) =>
+                    segment.type === 'item' ? (
+                        renderItemRow(segment.item)
+                    ) : (
+                        <div className="category-divider" key={`cat-${segIndex}`}>
+                            <span>{segment.name}</span>
+                            {segment.items.map(renderItemRow)}
+                        </div>
+                    )
+                )}
                 <button type="button" className="btn btn--ghost" onClick={addItem}>
                     + Добавить пункт
                 </button>

@@ -3,6 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useApiClient, useApiUpload } from '../api/useApiClient';
 import StatusBadge from '../components/StatusBadge';
 import ChecklistItem from '../components/ChecklistItem';
+import CategorySection from '../components/CategorySection';
+import SignaturePad from '../components/SignaturePad';
+import { buildDisplaySegments } from '../utils/groupByCategory';
 
 export default function EmployeeChecklistDetailPage() {
     const api = useApiClient();
@@ -14,6 +17,7 @@ export default function EmployeeChecklistDetailPage() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [signatureSaving, setSignatureSaving] = useState(false);
 
     async function load() {
         try {
@@ -34,7 +38,9 @@ export default function EmployeeChecklistDetailPage() {
     }, [id]);
 
     function applyUpdate(itemId, itemPatch, updatedAssignment) {
-        setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, ...itemPatch } : it)));
+        if (itemId) {
+            setItems((prev) => prev.map((it) => (it.id === itemId ? { ...it, ...itemPatch } : it)));
+        }
         // Merge rather than replace: some responses don't carry every enriched
         // field (e.g. template), so a blind replace would drop it from state.
         if (updatedAssignment) setAssignment((prev) => ({ ...prev, ...updatedAssignment }));
@@ -77,13 +83,42 @@ export default function EmployeeChecklistDetailPage() {
         }
     }
 
+    async function handleSaveSignature(blob) {
+        setSignatureSaving(true);
+        setError(null);
+        try {
+            const formData = new FormData();
+            formData.append('signature', blob, 'signature.png');
+            const res = await upload(`/api/assignments/${id}/signature`, formData);
+            applyUpdate(null, null, res.assignment);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSignatureSaving(false);
+        }
+    }
+
     if (loading) return <p>Загрузка...</p>;
     if (error && !assignment) return <p className="error-text">{error}</p>;
     if (!assignment) return null;
 
     const doneCount = items.filter((i) => i.is_done).length;
     const progressPct = items.length ? Math.round((doneCount / items.length) * 100) : 0;
+    const allItemsDone = items.length > 0 && doneCount === items.length;
     const readOnly = assignment.status === 'completed';
+
+    const renderItem = (item) => (
+        <ChecklistItem
+            key={item.id}
+            item={item}
+            readOnly={readOnly}
+            onToggleDone={handleToggleDone}
+            onUploadPhoto={handleUploadPhoto}
+            onSaveComment={handleSaveComment}
+        />
+    );
+
+    const segments = buildDisplaySegments(items, (item) => item.template_item.category);
 
     return (
         <div className="page">
@@ -110,17 +145,33 @@ export default function EmployeeChecklistDetailPage() {
             {error && <p className="error-text">{error}</p>}
 
             <ul className="checklist-items">
-                {items.map((item) => (
-                    <ChecklistItem
-                        key={item.id}
-                        item={item}
-                        readOnly={readOnly}
-                        onToggleDone={handleToggleDone}
-                        onUploadPhoto={handleUploadPhoto}
-                        onSaveComment={handleSaveComment}
-                    />
-                ))}
+                {segments.map((segment, index) =>
+                    segment.type === 'item' ? (
+                        renderItem(segment.item)
+                    ) : (
+                        <CategorySection
+                            key={`cat-${index}`}
+                            name={segment.name}
+                            items={segment.items}
+                            doneCount={segment.items.filter((i) => i.is_done).length}
+                            renderItem={renderItem}
+                        />
+                    )
+                )}
             </ul>
+
+            <section className="signature-section">
+                <h2>Подпись</h2>
+                {assignment.signature_url ? (
+                    <a href={assignment.signature_url} target="_blank" rel="noopener noreferrer">
+                        <img src={assignment.signature_url} alt="Подпись" className="signature-pad__preview" />
+                    </a>
+                ) : allItemsDone ? (
+                    <SignaturePad onSave={handleSaveSignature} saving={signatureSaving} disabled={readOnly} />
+                ) : (
+                    <p className="hint">Сначала выполните все пункты, чтобы поставить подпись.</p>
+                )}
+            </section>
         </div>
     );
 }

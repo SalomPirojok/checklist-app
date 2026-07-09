@@ -557,3 +557,80 @@ body {
     border-radius: 50%;
     display: block;
 }
+
+/* --- categories --- */
+
+.item-row__category {
+    font-size: 13px;
+    color: var(--tg-theme-hint-color, #8e8e93);
+}
+
+.category-divider {
+    border-left: 3px solid var(--tg-theme-button-color, #2481cc);
+    padding: 4px 0 4px 10px;
+    margin: 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.category-divider > span {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.category-section {
+    background: transparent;
+}
+
+.category-section__header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--tg-theme-secondary-bg-color, #f2f2f7);
+    border: none;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--tg-theme-text-color, #1c1c1e);
+    cursor: pointer;
+}
+
+.checklist-items--nested {
+    margin: 8px 0 0;
+    padding-left: 12px;
+}
+
+/* --- signature --- */
+
+.signature-section {
+    margin-top: 20px;
+}
+
+.signature-pad {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.signature-pad__canvas {
+    width: 100%;
+    max-width: 320px;
+    height: 150px;
+    border-radius: 10px;
+    border: 1px solid var(--tg-theme-hint-color, #c3c2b7);
+    background: #ffffff;
+    touch-action: none;
+}
+
+.signature-pad__preview {
+    max-width: 320px;
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--tg-theme-hint-color, #c3c2b7);
+    background: #ffffff;
+    display: block;
+}

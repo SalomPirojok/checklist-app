@@ -2,7 +2,12 @@ import { Router } from 'express';
 import multer from 'multer';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { uploadAssignmentItemPhoto, verifyPhotoBelongsToItem } from '../lib/storage.js';
+import {
+    uploadAssignmentItemPhoto,
+    verifyPhotoBelongsToItem,
+    uploadSignaturePhoto,
+    verifySignatureBelongsToAssignment,
+} from '../lib/storage.js';
 
 const router = Router();
 
@@ -96,6 +101,29 @@ async function syncOverdueStatuses(assignmentRows) {
 
     const updatedMap = new Map(updated.map((u) => [u.id, u]));
     return assignmentRows.map((a) => updatedMap.get(a.id) || a);
+}
+
+// An assignment only becomes 'completed' once every item is done AND the
+// employee's signature is on file — the signature is the last required step.
+function computeStatusUpdate(assignment, allItemsDone, hasSignature) {
+    const now = new Date();
+    const updates = {};
+
+    if (allItemsDone && hasSignature) {
+        updates.status = 'completed';
+        updates.completed_at = now.toISOString();
+    } else if (new Date(assignment.due_at) < now) {
+        updates.status = 'overdue';
+        if (!assignment.started_at) updates.started_at = now.toISOString();
+    } else {
+        updates.status = 'in_progress';
+        if (!assignment.started_at) updates.started_at = now.toISOString();
+    }
+    // Reverting after a prior completion (e.g. un-checking an item) should clear the stale completed_at.
+    if (updates.status !== 'completed' && assignment.completed_at) {
+        updates.completed_at = null;
+    }
+    return updates;
 }
 
 router.get('/', async (req, res) => {
@@ -212,7 +240,7 @@ router.get('/:id', async (req, res) => {
 
     const { data: items, error: itemsError } = await supabase
         .from('checklist_assignment_items')
-        .select('*, template_item:checklist_template_items(title, description, requires_photo, order_index)')
+        .select('*, template_item:checklist_template_items(title, description, requires_photo, category, order_index)')
         .eq('assignment_id', assignment.id);
     if (itemsError) return res.status(500).json({ error: 'Failed to fetch assignment items' });
 
@@ -254,6 +282,62 @@ router.patch('/:id', async (req, res) => {
     if (error) return res.status(500).json({ error: 'Failed to update assignment' });
 
     res.json({ assignment: data });
+});
+
+router.post('/:id/signature', upload.single('signature'), async (req, res) => {
+    let assignment;
+    try {
+        assignment = await loadAssignmentInOrg(req.params.id, req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to fetch assignment' });
+    }
+    if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
+
+    const isOwnerOrManager = req.user.role === 'owner' || req.user.role === 'manager';
+    if (!isOwnerOrManager && assignment.assigned_to !== req.user.id) {
+        return res.status(403).json({ error: 'Not allowed to update this assignment' });
+    }
+
+    if (!req.file) {
+        return res.status(400).json({ error: 'signature file is required' });
+    }
+
+    let signatureUrl;
+    try {
+        signatureUrl = await uploadSignaturePhoto({
+            assignmentId: assignment.id,
+            buffer: req.file.buffer,
+            contentType: req.file.mimetype,
+            extension: MIME_EXTENSIONS[req.file.mimetype],
+        });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+
+    const verified = await verifySignatureBelongsToAssignment(signatureUrl, assignment.id);
+    if (!verified) {
+        return res.status(500).json({ error: 'Failed to verify uploaded signature' });
+    }
+
+    const { data: allItems, error: allItemsError } = await supabase
+        .from('checklist_assignment_items')
+        .select('is_done')
+        .eq('assignment_id', assignment.id);
+    if (allItemsError) return res.status(500).json({ error: 'Failed to recompute assignment status' });
+
+    const allDone = allItems.length > 0 && allItems.every((i) => i.is_done);
+    const statusUpdates = computeStatusUpdate(assignment, allDone, true);
+
+    const { data: updatedAssignment, error: updateError } = await supabase
+        .from('checklist_assignments')
+        .update({ signature_url: signatureUrl, ...statusUpdates })
+        .eq('id', assignment.id)
+        .select()
+        .single();
+    if (updateError) return res.status(500).json({ error: 'Failed to save signature' });
+
+    const [enrichedAssignment] = await enrichAssignments([updatedAssignment]);
+    res.json({ assignment: enrichedAssignment });
 });
 
 router.post('/:id/items/:itemId/photo', upload.single('photo'), async (req, res) => {
@@ -360,23 +444,7 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     if (allItemsError) return res.status(500).json({ error: 'Failed to recompute assignment status' });
 
     const allDone = allItems.every((i) => i.is_done);
-    const now = new Date();
-
-    const assignmentUpdates = {};
-    if (allDone) {
-        assignmentUpdates.status = 'completed';
-        assignmentUpdates.completed_at = now.toISOString();
-    } else if (new Date(assignment.due_at) < now) {
-        assignmentUpdates.status = 'overdue';
-        if (!assignment.started_at) assignmentUpdates.started_at = now.toISOString();
-    } else {
-        assignmentUpdates.status = 'in_progress';
-        if (!assignment.started_at) assignmentUpdates.started_at = now.toISOString();
-    }
-    // Reverting an item after a prior completion (e.g. un-checking it) should clear the stale completed_at.
-    if (assignmentUpdates.status !== 'completed' && assignment.completed_at) {
-        assignmentUpdates.completed_at = null;
-    }
+    const assignmentUpdates = computeStatusUpdate(assignment, allDone, !!assignment.signature_url);
 
     let updatedAssignment = assignment;
     if (assignmentUpdates.status !== assignment.status || assignmentUpdates.completed_at !== undefined || assignmentUpdates.started_at) {
