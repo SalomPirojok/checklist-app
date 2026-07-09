@@ -78,7 +78,7 @@ export default function AssignmentDetailPage() {
 
             <p className="hint">Сотрудник: {assignment.assignee?.full_name || '—'}</p>
             {assignment.template?.description && <p className="hint">{assignment.template.description}</p>}
-            <p className="hint">Дедлайн: {new Date(assignment.due_at).toLocaleString('ru-RU')}</p>
+            <p className="hint">Дедлайн: {assignment.due_at ? new Date(assignment.due_at).toLocaleString('ru-RU') : 'без дедлайна'}</p>
             <p className="hint">
                 Выполнено: {doneCount} из {items.length}
             </p>

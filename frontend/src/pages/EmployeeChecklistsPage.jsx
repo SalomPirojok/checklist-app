@@ -4,6 +4,7 @@ import { useApiClient } from '../api/useApiClient';
 import StatusBadge from '../components/StatusBadge';
 
 function isToday(dateStr) {
+    if (!dateStr) return false;
     const d = new Date(dateStr);
     const now = new Date();
     return (
@@ -52,7 +53,9 @@ export default function EmployeeChecklistsPage() {
     if (error) return <p className="error-text">{error}</p>;
 
     const overdue = assignments.filter((a) => a.status === 'overdue');
-    const today = assignments.filter((a) => a.status !== 'overdue' && isToday(a.due_at));
+    // A no-deadline checklist has due_at null -- fall back to created_at so it
+    // still shows up on the day it was assigned.
+    const today = assignments.filter((a) => a.status !== 'overdue' && isToday(a.due_at || a.created_at));
 
     return (
         <div className="page">

@@ -86,7 +86,7 @@ async function enrichAssignments(assignmentRows) {
 async function syncOverdueStatuses(assignmentRows) {
     const now = new Date();
     const overdueIds = assignmentRows
-        .filter((a) => (a.status === 'not_started' || a.status === 'in_progress') && new Date(a.due_at) < now)
+        .filter((a) => (a.status === 'not_started' || a.status === 'in_progress') && a.due_at && new Date(a.due_at) < now)
         .map((a) => a.id);
 
     if (overdueIds.length === 0) return assignmentRows;
@@ -112,7 +112,7 @@ function computeStatusUpdate(assignment, allItemsDone, hasSignature) {
     if (allItemsDone && hasSignature) {
         updates.status = 'completed';
         updates.completed_at = now.toISOString();
-    } else if (new Date(assignment.due_at) < now) {
+    } else if (assignment.due_at && new Date(assignment.due_at) < now) {
         updates.status = 'overdue';
         if (!assignment.started_at) updates.started_at = now.toISOString();
     } else {

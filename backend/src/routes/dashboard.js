@@ -42,8 +42,11 @@ router.get('/today', async (req, res) => {
                   .from('checklist_assignments')
                   .select('*')
                   .in('assigned_to', orgUserIds)
-                  .gte('due_at', todayStart)
-                  .lt('due_at', todayEnd)
+                  // A no-deadline assignment (due_at null) has no due-date range to
+                  // match, so it's included instead by checking created_at is today.
+                  .or(
+                      `and(due_at.gte.${todayStart},due_at.lt.${todayEnd}),and(due_at.is.null,created_at.gte.${todayStart},created_at.lt.${todayEnd})`
+                  )
                   .order('due_at', { ascending: true })
             : { data: [], error: null },
         orgUserIds.length

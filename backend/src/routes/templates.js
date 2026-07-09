@@ -20,13 +20,28 @@ async function loadTemplateInOrg(templateId, organizationId) {
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-function validateAutoAssignFields({ auto_assign_time, due_offset_minutes }) {
+const VALID_DAYS_OF_WEEK = new Set([0, 1, 2, 3, 4, 5, 6]);
+
+function validateAutoAssignFields({ auto_assign_time, due_offset_minutes, auto_assign_days_of_week }) {
     if (auto_assign_time !== undefined && auto_assign_time !== null && !TIME_PATTERN.test(auto_assign_time)) {
         return 'auto_assign_time must be in HH:MM format';
     }
+    // null means "no deadline" (the checklist never becomes overdue) -- only
+    // reject values that are neither a positive integer nor explicitly null.
     if (due_offset_minutes !== undefined && due_offset_minutes !== null) {
         if (!Number.isInteger(due_offset_minutes) || due_offset_minutes <= 0) {
-            return 'due_offset_minutes must be a positive integer';
+            return 'due_offset_minutes must be a positive integer or null for no deadline';
+        }
+    }
+    // null/undefined/empty means "every day" -- only reject a non-empty array
+    // that isn't made of valid 0-6 day-of-week integers.
+    if (auto_assign_days_of_week !== undefined && auto_assign_days_of_week !== null) {
+        if (
+            !Array.isArray(auto_assign_days_of_week) ||
+            auto_assign_days_of_week.length === 0 ||
+            auto_assign_days_of_week.some((d) => !VALID_DAYS_OF_WEEK.has(d))
+        ) {
+            return 'auto_assign_days_of_week must be a non-empty array of integers 0-6, or null for every day';
         }
     }
     return null;
@@ -79,7 +94,15 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { title, description, items = [], auto_assign_enabled, auto_assign_time, due_offset_minutes } = req.body || {};
+    const {
+        title,
+        description,
+        items = [],
+        auto_assign_enabled,
+        auto_assign_time,
+        due_offset_minutes,
+        auto_assign_days_of_week,
+    } = req.body || {};
 
     if (!title) {
         return res.status(400).json({ error: 'title is required' });
@@ -90,7 +113,7 @@ router.post('/', async (req, res) => {
     if (items.some((item) => !item.title)) {
         return res.status(400).json({ error: 'every item requires a title' });
     }
-    const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes });
+    const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes, auto_assign_days_of_week });
     if (autoAssignError) return res.status(400).json({ error: autoAssignError });
 
     const templateInsert = {
@@ -101,7 +124,8 @@ router.post('/', async (req, res) => {
     };
     if (auto_assign_enabled !== undefined) templateInsert.auto_assign_enabled = !!auto_assign_enabled;
     if (auto_assign_time) templateInsert.auto_assign_time = auto_assign_time;
-    if (due_offset_minutes !== undefined && due_offset_minutes !== null) templateInsert.due_offset_minutes = due_offset_minutes;
+    if (due_offset_minutes !== undefined) templateInsert.due_offset_minutes = due_offset_minutes;
+    if (auto_assign_days_of_week !== undefined) templateInsert.auto_assign_days_of_week = auto_assign_days_of_week;
 
     const { data: template, error: templateError } = await supabase
         .from('checklist_templates')
@@ -138,8 +162,9 @@ router.patch('/:id', async (req, res) => {
     }
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const { title, description, is_archived, auto_assign_enabled, auto_assign_time, due_offset_minutes } = req.body || {};
-    const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes });
+    const { title, description, is_archived, auto_assign_enabled, auto_assign_time, due_offset_minutes, auto_assign_days_of_week } =
+        req.body || {};
+    const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes, auto_assign_days_of_week });
     if (autoAssignError) return res.status(400).json({ error: autoAssignError });
 
     const updates = {};
@@ -148,7 +173,8 @@ router.patch('/:id', async (req, res) => {
     if (is_archived !== undefined) updates.is_archived = is_archived;
     if (auto_assign_enabled !== undefined) updates.auto_assign_enabled = !!auto_assign_enabled;
     if (auto_assign_time) updates.auto_assign_time = auto_assign_time;
-    if (due_offset_minutes !== undefined && due_offset_minutes !== null) updates.due_offset_minutes = due_offset_minutes;
+    if (due_offset_minutes !== undefined) updates.due_offset_minutes = due_offset_minutes;
+    if (auto_assign_days_of_week !== undefined) updates.auto_assign_days_of_week = auto_assign_days_of_week;
 
     if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: 'No valid fields to update' });

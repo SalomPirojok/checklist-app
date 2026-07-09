@@ -131,7 +131,7 @@ export default function EmployeeChecklistDetailPage() {
                 <StatusBadge status={assignment.status} />
             </div>
             {assignment.template?.description && <p className="hint">{assignment.template.description}</p>}
-            <p className="hint">Дедлайн: {new Date(assignment.due_at).toLocaleString('ru-RU')}</p>
+            <p className="hint">Дедлайн: {assignment.due_at ? new Date(assignment.due_at).toLocaleString('ru-RU') : 'без дедлайна'}</p>
 
             <div className="progress-meter">
                 <div className="progress-meter__track">

@@ -5,6 +5,16 @@ import { buildDisplaySegments } from '../utils/groupByCategory';
 
 const emptyItem = () => ({ title: '', description: '', requires_photo: false, category: '' });
 
+const DAYS_OF_WEEK = [
+    { value: 1, label: 'Пн' },
+    { value: 2, label: 'Вт' },
+    { value: 3, label: 'Ср' },
+    { value: 4, label: 'Чт' },
+    { value: 5, label: 'Пт' },
+    { value: 6, label: 'Сб' },
+    { value: 0, label: 'Вс' },
+];
+
 export default function TemplateEditorPage() {
     const api = useApiClient();
     const navigate = useNavigate();
@@ -16,7 +26,9 @@ export default function TemplateEditorPage() {
     const [items, setItems] = useState([emptyItem()]);
     const [autoAssignEnabled, setAutoAssignEnabled] = useState(false);
     const [autoAssignTime, setAutoAssignTime] = useState('09:00');
+    const [noDeadline, setNoDeadline] = useState(false);
     const [dueOffsetMinutes, setDueOffsetMinutes] = useState(120);
+    const [daysOfWeek, setDaysOfWeek] = useState(DAYS_OF_WEEK.map((d) => d.value));
     const [loading, setLoading] = useState(!isNew);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -31,7 +43,13 @@ export default function TemplateEditorPage() {
                 setDescription(res.template.description || '');
                 setAutoAssignEnabled(res.template.auto_assign_enabled);
                 setAutoAssignTime((res.template.auto_assign_time || '09:00').slice(0, 5));
+                setNoDeadline(res.template.due_offset_minutes === null || res.template.due_offset_minutes === undefined);
                 setDueOffsetMinutes(res.template.due_offset_minutes ?? 120);
+                setDaysOfWeek(
+                    res.template.auto_assign_days_of_week && res.template.auto_assign_days_of_week.length
+                        ? res.template.auto_assign_days_of_week
+                        : DAYS_OF_WEEK.map((d) => d.value)
+                );
                 setItems(
                     res.items.length
                         ? res.items.map((item) => ({
@@ -62,6 +80,10 @@ export default function TemplateEditorPage() {
         setItems((prev) => prev.filter((_, i) => i !== index));
     }
 
+    function toggleDay(day) {
+        setDaysOfWeek((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+    }
+
     async function handleSave(e) {
         e.preventDefault();
         setError(null);
@@ -74,15 +96,20 @@ export default function TemplateEditorPage() {
             setError('Добавьте хотя бы один пункт с названием.');
             return;
         }
-        if (autoAssignEnabled && (!Number.isInteger(dueOffsetMinutes) || dueOffsetMinutes <= 0)) {
+        if (autoAssignEnabled && !noDeadline && (!Number.isInteger(dueOffsetMinutes) || dueOffsetMinutes <= 0)) {
             setError('Дедлайн (в минутах) должен быть положительным целым числом.');
+            return;
+        }
+        if (autoAssignEnabled && daysOfWeek.length === 0) {
+            setError('Выберите хотя бы один день недели.');
             return;
         }
 
         const autoAssignFields = {
             auto_assign_enabled: autoAssignEnabled,
             auto_assign_time: autoAssignTime,
-            due_offset_minutes: dueOffsetMinutes,
+            due_offset_minutes: noDeadline ? null : dueOffsetMinutes,
+            auto_assign_days_of_week: daysOfWeek.length === DAYS_OF_WEEK.length ? null : daysOfWeek,
         };
 
         setSaving(true);
@@ -171,7 +198,7 @@ export default function TemplateEditorPage() {
                         checked={autoAssignEnabled}
                         onChange={(e) => setAutoAssignEnabled(e.target.checked)}
                     />
-                    <span>Автоназначение всем активным сотрудникам каждый день</span>
+                    <span>Автоназначение всем активным сотрудникам</span>
                 </label>
 
                 {autoAssignEnabled && (
@@ -185,16 +212,40 @@ export default function TemplateEditorPage() {
                                 onChange={(e) => setAutoAssignTime(e.target.value)}
                             />
                         </label>
+
                         <label className="field">
-                            <span>Дедлайн через (минут)</span>
-                            <input
-                                type="number"
-                                min="1"
-                                required
-                                value={dueOffsetMinutes}
-                                onChange={(e) => setDueOffsetMinutes(Number(e.target.value))}
-                            />
+                            <span>Дни недели</span>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                {DAYS_OF_WEEK.map((d) => (
+                                    <label key={d.value} className="checkbox-field" style={{ gap: '4px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={daysOfWeek.includes(d.value)}
+                                            onChange={() => toggleDay(d.value)}
+                                        />
+                                        <span>{d.label}</span>
+                                    </label>
+                                ))}
+                            </div>
                         </label>
+
+                        <label className="checkbox-field">
+                            <input type="checkbox" checked={noDeadline} onChange={(e) => setNoDeadline(e.target.checked)} />
+                            <span>Без дедлайна (никогда не становится просроченным)</span>
+                        </label>
+
+                        {!noDeadline && (
+                            <label className="field">
+                                <span>Дедлайн через (минут)</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    required
+                                    value={dueOffsetMinutes}
+                                    onChange={(e) => setDueOffsetMinutes(Number(e.target.value))}
+                                />
+                            </label>
+                        )}
                     </div>
                 )}
 

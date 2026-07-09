@@ -18,13 +18,20 @@ export async function runAutoAssignChecklists() {
     const now = new Date();
     const currentTime = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`;
 
-    const { data: templates, error: templatesError } = await supabase
+    const { data: allTemplates, error: templatesError } = await supabase
         .from('checklist_templates')
         .select('*')
         .eq('auto_assign_enabled', true)
         .eq('is_archived', false)
         .lte('auto_assign_time', currentTime);
     if (templatesError) throw new Error(`Failed to load auto-assign templates: ${templatesError.message}`);
+
+    // NULL/empty auto_assign_days_of_week means "every day" (legacy templates
+    // created before this field existed keep behaving exactly as before).
+    const todayDow = now.getUTCDay();
+    const templates = allTemplates.filter(
+        (t) => !t.auto_assign_days_of_week || t.auto_assign_days_of_week.length === 0 || t.auto_assign_days_of_week.includes(todayDow)
+    );
     if (templates.length === 0) return { templatesChecked: 0, assignmentsCreated: 0 };
 
     const todayStart = startOfDayUTC(now);
@@ -50,19 +57,25 @@ export async function runAutoAssignChecklists() {
             if (!templateItems.length) continue; // nothing to hand out
 
             const employeeIds = employees.map((e) => e.id);
+            // Keyed off created_at (not due_at) so this works the same whether
+            // or not the template has a deadline -- a no-deadline assignment
+            // has due_at null and would never match a due_at range filter.
             const { data: existingAssignments, error: existingError } = await supabase
                 .from('checklist_assignments')
                 .select('assigned_to')
                 .eq('template_id', template.id)
                 .in('assigned_to', employeeIds)
-                .gte('due_at', todayStart)
-                .lt('due_at', todayEnd);
+                .gte('created_at', todayStart)
+                .lt('created_at', todayEnd);
             if (existingError) throw new Error(existingError.message);
             const alreadyAssigned = new Set(existingAssignments.map((a) => a.assigned_to));
 
-            const [hours, minutes] = template.auto_assign_time.split(':').map(Number);
-            const dueAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes));
-            dueAt.setUTCMinutes(dueAt.getUTCMinutes() + (template.due_offset_minutes || 0));
+            let dueAt = null;
+            if (template.due_offset_minutes !== null && template.due_offset_minutes !== undefined) {
+                const [hours, minutes] = template.auto_assign_time.split(':').map(Number);
+                dueAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes));
+                dueAt.setUTCMinutes(dueAt.getUTCMinutes() + template.due_offset_minutes);
+            }
 
             for (const employee of employees) {
                 if (alreadyAssigned.has(employee.id)) continue;
@@ -73,7 +86,7 @@ export async function runAutoAssignChecklists() {
                         template_id: template.id,
                         assigned_to: employee.id,
                         assigned_by: template.created_by,
-                        due_at: dueAt.toISOString(),
+                        due_at: dueAt ? dueAt.toISOString() : null,
                         status: 'not_started',
                     })
                     .select()
