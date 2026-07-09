@@ -8,6 +8,7 @@ export default function TemplatesPage() {
     const api = useApiClient();
     const navigate = useNavigate();
     const [templates, setTemplates] = useState([]);
+    const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const showSlowHint = useDelayedFlag(loading, 4000);
@@ -30,6 +31,14 @@ export default function TemplatesPage() {
     useEffect(() => {
         load();
     }, [api]);
+
+    useEffect(() => {
+        api('/api/departments')
+            .then((res) => setDepartments(res.departments))
+            .catch(() => {});
+    }, [api]);
+
+    const departmentById = new Map(departments.map((d) => [d.id, d]));
 
     async function handleArchive(template) {
         if (!confirm(`Архивировать шаблон «${template.title}»?`)) return;
@@ -79,6 +88,9 @@ export default function TemplatesPage() {
                             <div>
                                 <Link to={`/templates/${template.id}`} className="list-row__title list-row__title--link">
                                     {template.title}
+                                    {template.department_id && (
+                                        <span className="tag">{departmentById.get(template.department_id)?.name || '…'}</span>
+                                    )}
                                 </Link>
                                 {template.description && <div className="hint">{template.description}</div>}
                             </div>

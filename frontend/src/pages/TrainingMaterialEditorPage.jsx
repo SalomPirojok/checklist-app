@@ -12,12 +12,20 @@ export default function TrainingMaterialEditorPage() {
 
     const [title, setTitle] = useState('');
     const [bodyText, setBodyText] = useState('');
+    const [departmentId, setDepartmentId] = useState('');
+    const [departments, setDepartments] = useState([]);
     const [existingFileUrl, setExistingFileUrl] = useState(null);
     const [removeExistingFile, setRemoveExistingFile] = useState(false);
     const [newFile, setNewFile] = useState(null);
     const [loading, setLoading] = useState(!isNew);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+
+    useEffect(() => {
+        api('/api/departments')
+            .then((res) => setDepartments(res.departments))
+            .catch(() => {});
+    }, [api]);
 
     useEffect(() => {
         if (isNew) return;
@@ -27,6 +35,7 @@ export default function TrainingMaterialEditorPage() {
                 if (cancelled) return;
                 setTitle(res.material.title);
                 setBodyText(res.material.body_text || '');
+                setDepartmentId(res.material.department_id || '');
                 setExistingFileUrl(res.material.file_url);
             })
             .catch((err) => !cancelled && setError(err.message))
@@ -58,6 +67,7 @@ export default function TrainingMaterialEditorPage() {
             const formData = new FormData();
             formData.append('title', title);
             formData.append('body_text', bodyText);
+            formData.append('department_id', departmentId);
             if (newFile) formData.append('file', newFile);
             if (!isNew && removeExistingFile && !newFile) formData.append('remove_file', 'true');
 
@@ -89,6 +99,20 @@ export default function TrainingMaterialEditorPage() {
                     <span>Текст</span>
                     <textarea value={bodyText} onChange={(e) => setBodyText(e.target.value)} rows={8} />
                 </label>
+
+                {departments.length > 0 && (
+                    <label className="field">
+                        <span>Подразделение</span>
+                        <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+                            <option value="">Для всех</option>
+                            {departments.map((dept) => (
+                                <option key={dept.id} value={dept.id}>
+                                    {dept.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
 
                 <label className="field">
                     <span>Вложение (фото, видео, PDF или документ, необязательно)</span>

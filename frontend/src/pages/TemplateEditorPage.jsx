@@ -29,9 +29,17 @@ export default function TemplateEditorPage() {
     const [noDeadline, setNoDeadline] = useState(false);
     const [dueOffsetMinutes, setDueOffsetMinutes] = useState(120);
     const [daysOfWeek, setDaysOfWeek] = useState(DAYS_OF_WEEK.map((d) => d.value));
+    const [departmentId, setDepartmentId] = useState('');
+    const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(!isNew);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+
+    useEffect(() => {
+        api('/api/departments')
+            .then((res) => setDepartments(res.departments))
+            .catch(() => {});
+    }, [api]);
 
     useEffect(() => {
         if (isNew) return;
@@ -50,6 +58,7 @@ export default function TemplateEditorPage() {
                         ? res.template.auto_assign_days_of_week
                         : DAYS_OF_WEEK.map((d) => d.value)
                 );
+                setDepartmentId(res.template.department_id || '');
                 setItems(
                     res.items.length
                         ? res.items.map((item) => ({
@@ -110,6 +119,7 @@ export default function TemplateEditorPage() {
             auto_assign_time: autoAssignTime,
             due_offset_minutes: noDeadline ? null : dueOffsetMinutes,
             auto_assign_days_of_week: daysOfWeek.length === DAYS_OF_WEEK.length ? null : daysOfWeek,
+            department_id: departmentId || null,
         };
 
         setSaving(true);
@@ -192,13 +202,27 @@ export default function TemplateEditorPage() {
                     <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
                 </label>
 
+                {departments.length > 0 && (
+                    <label className="field">
+                        <span>Подразделение</span>
+                        <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+                            <option value="">Для всех</option>
+                            {departments.map((dept) => (
+                                <option key={dept.id} value={dept.id}>
+                                    {dept.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+
                 <label className="checkbox-field">
                     <input
                         type="checkbox"
                         checked={autoAssignEnabled}
                         onChange={(e) => setAutoAssignEnabled(e.target.checked)}
                     />
-                    <span>Автоназначение всем активным сотрудникам</span>
+                    <span>Автоназначение всем активным сотрудникам {departmentId ? 'подразделения' : ''}</span>
                 </label>
 
                 {autoAssignEnabled && (

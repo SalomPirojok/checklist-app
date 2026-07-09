@@ -44,6 +44,22 @@ async function canManageTraining(req) {
     return !!data?.can_manage_training;
 }
 
+// null means "for everyone" (unchanged legacy behavior) -- only a non-null
+// value needs to be verified as belonging to this organization.
+async function validateDepartmentId(departmentId, organizationId) {
+    if (departmentId === null || departmentId === undefined) return null;
+    const { data, error } = await supabase
+        .from('departments')
+        .select('id')
+        .eq('id', departmentId)
+        .eq('organization_id', organizationId)
+        .eq('is_archived', false)
+        .maybeSingle();
+    if (error) return 'Failed to look up department';
+    if (!data) return 'department_id not found in your organization';
+    return null;
+}
+
 router.get('/', async (req, res) => {
     let query = supabase
         .from('training_materials')
@@ -53,6 +69,19 @@ router.get('/', async (req, res) => {
 
     const includeArchived = req.query.archived === 'true' && req.user.role !== 'employee';
     if (!includeArchived) query = query.eq('is_archived', false);
+
+    // Owner/manager manage the full catalog regardless of department; an
+    // employee only sees org-wide material (department_id null) plus their
+    // own department's material.
+    if (req.user.role === 'employee') {
+        const { data: me, error: meError } = await supabase
+            .from('users')
+            .select('department_id')
+            .eq('id', req.user.id)
+            .maybeSingle();
+        if (meError) return res.status(500).json({ error: 'Failed to look up your department' });
+        query = me?.department_id ? query.or(`department_id.is.null,department_id.eq.${me.department_id}`) : query.is('department_id', null);
+    }
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: 'Failed to list training materials' });
@@ -67,7 +96,7 @@ router.get('/results', async (req, res) => {
 
     const { data: materials, error: materialsError } = await supabase
         .from('training_materials')
-        .select('id, title')
+        .select('id, title, department_id')
         .eq('organization_id', req.user.organizationId)
         .eq('is_archived', false);
     if (materialsError) return res.status(500).json({ error: 'Failed to load training materials' });
@@ -83,7 +112,7 @@ router.get('/results', async (req, res) => {
 
     const { data: employees, error: employeesError } = await supabase
         .from('users')
-        .select('id, full_name, role')
+        .select('id, full_name, role, department_id')
         .eq('organization_id', req.user.organizationId)
         .eq('is_active', true);
     if (employeesError) return res.status(500).json({ error: 'Failed to load employees' });
@@ -100,7 +129,13 @@ router.get('/results', async (req, res) => {
     const results = tests.map((test) => {
         const material = materialById.get(test.material_id);
         const testAttempts = attempts.filter((a) => a.test_id === test.id);
-        const employeeResults = employees.map((employee) => {
+        // A department-restricted material's results only need to list
+        // employees who could ever see it -- org-wide material (department_id
+        // null) still lists everyone, matching the auto-assign fan-out rule.
+        const relevantEmployees = material.department_id
+            ? employees.filter((e) => e.department_id === material.department_id)
+            : employees;
+        const employeeResults = relevantEmployees.map((employee) => {
             const theirAttempts = testAttempts.filter((a) => a.user_id === employee.id);
             if (theirAttempts.length === 0) {
                 return { user_id: employee.id, full_name: employee.full_name, role: employee.role, attempted: false };
@@ -144,6 +179,17 @@ router.get('/:id', async (req, res) => {
     if (material.is_archived && req.user.role === 'employee') {
         return res.status(404).json({ error: 'Training material not found' });
     }
+    if (material.department_id && req.user.role === 'employee') {
+        const { data: me, error: meError } = await supabase
+            .from('users')
+            .select('department_id')
+            .eq('id', req.user.id)
+            .maybeSingle();
+        if (meError) return res.status(500).json({ error: 'Failed to look up your department' });
+        if (me?.department_id !== material.department_id) {
+            return res.status(404).json({ error: 'Training material not found' });
+        }
+    }
     res.json({ material });
 });
 
@@ -154,6 +200,11 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     const { title, body_text } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title is required' });
+
+    // Multipart form fields arrive as strings; an empty string means "for everyone".
+    const departmentId = req.body.department_id ? req.body.department_id : null;
+    const departmentError = await validateDepartmentId(departmentId, req.user.organizationId);
+    if (departmentError) return res.status(400).json({ error: departmentError });
 
     let fileUrl = null;
     if (req.file) {
@@ -176,6 +227,7 @@ router.post('/', upload.single('file'), async (req, res) => {
             title,
             body_text: body_text || null,
             file_url: fileUrl,
+            department_id: departmentId,
             created_by: req.user.id,
         })
         .select()
@@ -199,11 +251,17 @@ router.patch('/:id', upload.single('file'), async (req, res) => {
     if (lookupError) return res.status(500).json({ error: 'Failed to fetch training material' });
     if (!material) return res.status(404).json({ error: 'Training material not found' });
 
-    const { title, body_text, is_archived, remove_file } = req.body || {};
+    const { title, body_text, is_archived, remove_file, department_id } = req.body || {};
     const updates = {};
     if (title !== undefined) updates.title = title;
     if (body_text !== undefined) updates.body_text = body_text || null;
     if (is_archived !== undefined) updates.is_archived = is_archived === true || is_archived === 'true';
+    if (department_id !== undefined) {
+        const departmentId = department_id ? department_id : null;
+        const departmentError = await validateDepartmentId(departmentId, req.user.organizationId);
+        if (departmentError) return res.status(400).json({ error: departmentError });
+        updates.department_id = departmentId;
+    }
 
     if (req.file) {
         try {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import { useAuth } from '../context/AuthContext';
 import { useDelayedFlag } from '../hooks/useDelayedFlag';
@@ -8,9 +9,11 @@ const emptyForm = { telegram_id: '', full_name: '', username: '', role: 'employe
 
 export default function EmployeesPage() {
     const api = useApiClient();
+    const navigate = useNavigate();
     const { user: currentUser } = useAuth();
 
     const [employees, setEmployees] = useState([]);
+    const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState(null);
     const showSlowHint = useDelayedFlag(loading, 4000);
@@ -37,6 +40,24 @@ export default function EmployeesPage() {
     useEffect(() => {
         load();
     }, [api]);
+
+    useEffect(() => {
+        api('/api/departments')
+            .then((res) => setDepartments(res.departments))
+            .catch(() => {});
+    }, [api]);
+
+    async function handleDepartmentChange(employee, departmentId) {
+        try {
+            await api(`/api/employees/${employee.id}`, {
+                method: 'PATCH',
+                body: { department_id: departmentId || null },
+            });
+            await load();
+        } catch (err) {
+            setListError(err.message);
+        }
+    }
 
     function openCreateForm() {
         setForm(emptyForm);
@@ -119,9 +140,16 @@ export default function EmployeesPage() {
         <div className="page">
             <div className="page-header">
                 <h1>Сотрудники</h1>
-                <button className="btn" onClick={openCreateForm}>
-                    + Добавить
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    {currentUser.role === 'owner' && (
+                        <button className="btn btn--ghost" onClick={() => navigate('/departments')}>
+                            Подразделения
+                        </button>
+                    )}
+                    <button className="btn" onClick={openCreateForm}>
+                        + Добавить
+                    </button>
+                </div>
             </div>
 
             {loading && (
@@ -156,6 +184,22 @@ export default function EmployeesPage() {
                                         {ROLE_LABELS[employee.role] || employee.role}
                                         {employee.username && ` · @${employee.username}`}
                                     </div>
+                                    {canAct && employee.role !== 'owner' && departments.length > 0 && (
+                                        <label className="hint" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                            Подразделение:
+                                            <select
+                                                value={employee.department_id || ''}
+                                                onChange={(e) => handleDepartmentChange(employee, e.target.value)}
+                                            >
+                                                <option value="">Без подразделения</option>
+                                                {departments.map((dept) => (
+                                                    <option key={dept.id} value={dept.id}>
+                                                        {dept.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                    )}
                                     {currentUser.role === 'owner' && employee.role === 'manager' && (
                                         <label className="hint" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
                                             <input

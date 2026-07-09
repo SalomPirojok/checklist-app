@@ -99,7 +99,7 @@ router.patch('/:id', async (req, res) => {
         return res.status(403).json({ error: 'Not allowed to modify this user' });
     }
 
-    const { full_name, username, role, is_active, can_manage_training } = req.body || {};
+    const { full_name, username, role, is_active, can_manage_training, department_id } = req.body || {};
     const updates = {};
 
     if (full_name !== undefined) updates.full_name = full_name;
@@ -118,6 +118,20 @@ router.patch('/:id', async (req, res) => {
             return res.status(403).json({ error: 'Only the owner can manage training permissions' });
         }
         updates.can_manage_training = !!can_manage_training;
+    }
+    if (department_id !== undefined) {
+        if (department_id !== null) {
+            const { data: department, error: deptError } = await supabase
+                .from('departments')
+                .select('id')
+                .eq('id', department_id)
+                .eq('organization_id', req.user.organizationId)
+                .eq('is_archived', false)
+                .maybeSingle();
+            if (deptError) return res.status(500).json({ error: 'Failed to look up department' });
+            if (!department) return res.status(400).json({ error: 'department_id not found in your organization' });
+        }
+        updates.department_id = department_id;
     }
 
     if (Object.keys(updates).length === 0) {

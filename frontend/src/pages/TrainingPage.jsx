@@ -12,6 +12,7 @@ export default function TrainingPage() {
     const navigate = useNavigate();
     const { user } = useAuth();
     const [materials, setMaterials] = useState([]);
+    const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -32,6 +33,13 @@ export default function TrainingPage() {
         load();
     }, [api]);
 
+    useEffect(() => {
+        api('/api/departments')
+            .then((res) => setDepartments(res.departments))
+            .catch(() => {});
+    }, [api]);
+
+    const departmentById = new Map(departments.map((d) => [d.id, d]));
     const canManage = canManageTrainingClientSide(user);
 
     return (
@@ -62,6 +70,9 @@ export default function TrainingPage() {
                                 <div className="list-row__title">
                                     {material.title}
                                     {material.is_archived && <span className="tag">архив</span>}
+                                    {material.department_id && (
+                                        <span className="tag">{departmentById.get(material.department_id)?.name || '…'}</span>
+                                    )}
                                 </div>
                                 {material.file_url && <div className="hint">📎 есть вложение</div>}
                             </Link>

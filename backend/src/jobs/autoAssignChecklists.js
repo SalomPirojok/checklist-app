@@ -40,12 +40,17 @@ export async function runAutoAssignChecklists() {
 
     for (const template of templates) {
         try {
-            const { data: employees, error: employeesError } = await supabase
+            let employeesQuery = supabase
                 .from('users')
                 .select('id')
                 .eq('organization_id', template.organization_id)
                 .eq('is_active', true)
                 .in('role', ['employee', 'manager']);
+            // A template with no department is "for everyone" (unchanged legacy
+            // behavior); a department-restricted template only reaches employees
+            // in that exact department.
+            if (template.department_id) employeesQuery = employeesQuery.eq('department_id', template.department_id);
+            const { data: employees, error: employeesError } = await employeesQuery;
             if (employeesError) throw new Error(employeesError.message);
             if (!employees.length) continue;
 

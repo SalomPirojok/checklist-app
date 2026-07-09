@@ -18,6 +18,22 @@ async function loadTemplateInOrg(templateId, organizationId) {
     return data;
 }
 
+// null means "for everyone" (unchanged legacy behavior) -- only a non-null
+// value needs to be verified as belonging to this organization.
+async function validateDepartmentId(departmentId, organizationId) {
+    if (departmentId === null || departmentId === undefined) return null;
+    const { data, error } = await supabase
+        .from('departments')
+        .select('id')
+        .eq('id', departmentId)
+        .eq('organization_id', organizationId)
+        .eq('is_archived', false)
+        .maybeSingle();
+    if (error) return 'Failed to look up department';
+    if (!data) return 'department_id not found in your organization';
+    return null;
+}
+
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const VALID_DAYS_OF_WEEK = new Set([0, 1, 2, 3, 4, 5, 6]);
@@ -102,6 +118,7 @@ router.post('/', async (req, res) => {
         auto_assign_time,
         due_offset_minutes,
         auto_assign_days_of_week,
+        department_id,
     } = req.body || {};
 
     if (!title) {
@@ -115,6 +132,8 @@ router.post('/', async (req, res) => {
     }
     const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes, auto_assign_days_of_week });
     if (autoAssignError) return res.status(400).json({ error: autoAssignError });
+    const departmentError = await validateDepartmentId(department_id, req.user.organizationId);
+    if (departmentError) return res.status(400).json({ error: departmentError });
 
     const templateInsert = {
         organization_id: req.user.organizationId,
@@ -126,6 +145,7 @@ router.post('/', async (req, res) => {
     if (auto_assign_time) templateInsert.auto_assign_time = auto_assign_time;
     if (due_offset_minutes !== undefined) templateInsert.due_offset_minutes = due_offset_minutes;
     if (auto_assign_days_of_week !== undefined) templateInsert.auto_assign_days_of_week = auto_assign_days_of_week;
+    if (department_id !== undefined) templateInsert.department_id = department_id;
 
     const { data: template, error: templateError } = await supabase
         .from('checklist_templates')
@@ -162,10 +182,20 @@ router.patch('/:id', async (req, res) => {
     }
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const { title, description, is_archived, auto_assign_enabled, auto_assign_time, due_offset_minutes, auto_assign_days_of_week } =
-        req.body || {};
+    const {
+        title,
+        description,
+        is_archived,
+        auto_assign_enabled,
+        auto_assign_time,
+        due_offset_minutes,
+        auto_assign_days_of_week,
+        department_id,
+    } = req.body || {};
     const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes, auto_assign_days_of_week });
     if (autoAssignError) return res.status(400).json({ error: autoAssignError });
+    const departmentError = await validateDepartmentId(department_id, req.user.organizationId);
+    if (departmentError) return res.status(400).json({ error: departmentError });
 
     const updates = {};
     if (title !== undefined) updates.title = title;
@@ -175,6 +205,7 @@ router.patch('/:id', async (req, res) => {
     if (auto_assign_time) updates.auto_assign_time = auto_assign_time;
     if (due_offset_minutes !== undefined) updates.due_offset_minutes = due_offset_minutes;
     if (auto_assign_days_of_week !== undefined) updates.auto_assign_days_of_week = auto_assign_days_of_week;
+    if (department_id !== undefined) updates.department_id = department_id;
 
     if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: 'No valid fields to update' });

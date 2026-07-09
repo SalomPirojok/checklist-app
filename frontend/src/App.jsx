@@ -17,6 +17,7 @@ import TrainingMaterialEditorPage from './pages/TrainingMaterialEditorPage';
 import TrainingTestEditorPage from './pages/TrainingTestEditorPage';
 import TrainingTestTakePage from './pages/TrainingTestTakePage';
 import TrainingResultsPage from './pages/TrainingResultsPage';
+import DepartmentsPage from './pages/DepartmentsPage';
 
 function AppContent() {
     const { status, error, user } = useAuth();
@@ -33,6 +34,7 @@ function AppContent() {
                     <Route element={<AppLayout />}>
                         <Route path="/" element={<DashboardPage />} />
                         <Route path="/employees" element={<EmployeesPage />} />
+                        <Route path="/departments" element={<DepartmentsPage />} />
                         <Route path="/templates" element={<TemplatesPage />} />
                         <Route path="/templates/new" element={<TemplateEditorPage />} />
                         <Route path="/templates/:id" element={<TemplateEditorPage />} />
