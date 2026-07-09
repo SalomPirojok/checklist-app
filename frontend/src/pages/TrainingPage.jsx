@@ -39,9 +39,14 @@ export default function TrainingPage() {
             <div className="page-header">
                 <h1>Обучение</h1>
                 {canManage && (
-                    <button className="btn" onClick={() => navigate('/training/new')}>
-                        + Добавить материал
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn btn--ghost" onClick={() => navigate('/training/results')}>
+                            Результаты
+                        </button>
+                        <button className="btn" onClick={() => navigate('/training/new')}>
+                            + Добавить материал
+                        </button>
+                    </div>
                 )}
             </div>
 

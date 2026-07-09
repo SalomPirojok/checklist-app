@@ -59,6 +59,79 @@ router.get('/', async (req, res) => {
     res.json({ materials: data });
 });
 
+// Registered before '/:id' so "results" isn't swallowed as a material id.
+router.get('/results', async (req, res) => {
+    if (!(await canManageTraining(req))) {
+        return res.status(403).json({ error: 'Not allowed to view training results' });
+    }
+
+    const { data: materials, error: materialsError } = await supabase
+        .from('training_materials')
+        .select('id, title')
+        .eq('organization_id', req.user.organizationId)
+        .eq('is_archived', false);
+    if (materialsError) return res.status(500).json({ error: 'Failed to load training materials' });
+    if (materials.length === 0) return res.json({ results: [] });
+
+    const materialIds = materials.map((m) => m.id);
+    const { data: tests, error: testsError } = await supabase
+        .from('training_tests')
+        .select('id, material_id, passing_score_percent')
+        .in('material_id', materialIds);
+    if (testsError) return res.status(500).json({ error: 'Failed to load tests' });
+    if (tests.length === 0) return res.json({ results: [] });
+
+    const { data: employees, error: employeesError } = await supabase
+        .from('users')
+        .select('id, full_name, role')
+        .eq('organization_id', req.user.organizationId)
+        .eq('is_active', true);
+    if (employeesError) return res.status(500).json({ error: 'Failed to load employees' });
+
+    const testIds = tests.map((t) => t.id);
+    const { data: attempts, error: attemptsError } = await supabase
+        .from('training_test_attempts')
+        .select('test_id, user_id, score_percent, passed, created_at')
+        .in('test_id', testIds)
+        .eq('organization_id', req.user.organizationId);
+    if (attemptsError) return res.status(500).json({ error: 'Failed to load attempts' });
+
+    const materialById = new Map(materials.map((m) => [m.id, m]));
+    const results = tests.map((test) => {
+        const material = materialById.get(test.material_id);
+        const testAttempts = attempts.filter((a) => a.test_id === test.id);
+        const employeeResults = employees.map((employee) => {
+            const theirAttempts = testAttempts.filter((a) => a.user_id === employee.id);
+            if (theirAttempts.length === 0) {
+                return { user_id: employee.id, full_name: employee.full_name, role: employee.role, attempted: false };
+            }
+            const bestScore = Math.max(...theirAttempts.map((a) => a.score_percent));
+            const passedEver = theirAttempts.some((a) => a.passed);
+            const lastAttemptAt = theirAttempts.reduce(
+                (latest, a) => (a.created_at > latest ? a.created_at : latest),
+                theirAttempts[0].created_at
+            );
+            return {
+                user_id: employee.id,
+                full_name: employee.full_name,
+                role: employee.role,
+                attempted: true,
+                attempt_count: theirAttempts.length,
+                best_score_percent: bestScore,
+                passed: passedEver,
+                last_attempt_at: lastAttemptAt,
+            };
+        });
+        return {
+            material: { id: material.id, title: material.title },
+            test: { id: test.id, passing_score_percent: test.passing_score_percent },
+            employees: employeeResults,
+        };
+    });
+
+    res.json({ results });
+});
+
 router.get('/:id', async (req, res) => {
     const { data: material, error } = await supabase
         .from('training_materials')
@@ -187,6 +260,303 @@ router.delete('/:id', async (req, res) => {
 
     if (error) return res.status(500).json({ error: 'Failed to archive training material' });
     res.json({ material: data });
+});
+
+async function loadMaterialInOrg(materialId, organizationId) {
+    const { data, error } = await supabase
+        .from('training_materials')
+        .select('*')
+        .eq('id', materialId)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+    if (error) throw new Error('lookup failed');
+    return data;
+}
+
+function validateTestPayload({ passing_score_percent, questions }) {
+    if (passing_score_percent !== undefined) {
+        if (!Number.isInteger(passing_score_percent) || passing_score_percent < 1 || passing_score_percent > 100) {
+            return 'passing_score_percent must be an integer between 1 and 100';
+        }
+    }
+    if (!Array.isArray(questions) || questions.length === 0) {
+        return 'questions must be a non-empty array';
+    }
+    for (const q of questions) {
+        if (!q.question_text || !q.question_text.trim()) {
+            return 'every question requires question_text';
+        }
+        if (!Array.isArray(q.options) || q.options.length < 2) {
+            return 'every question requires at least 2 options';
+        }
+        if (q.options.some((o) => !o.option_text || !o.option_text.trim())) {
+            return 'every option requires option_text';
+        }
+        const correctCount = q.options.filter((o) => o.is_correct).length;
+        if (correctCount !== 1) {
+            return 'every question must have exactly one correct option';
+        }
+    }
+    return null;
+}
+
+// One test per material. GET returns null test if none exists yet, so the
+// frontend can show "add a test" (manager) or "no test yet" (employee).
+// Employees never see is_correct on options — that would leak the answer key.
+router.get('/:materialId/test', async (req, res) => {
+    let material;
+    try {
+        material = await loadMaterialInOrg(req.params.materialId, req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to fetch training material' });
+    }
+    if (!material) return res.status(404).json({ error: 'Training material not found' });
+    if (material.is_archived && req.user.role === 'employee') {
+        return res.status(404).json({ error: 'Training material not found' });
+    }
+
+    const { data: test, error: testError } = await supabase
+        .from('training_tests')
+        .select('*')
+        .eq('material_id', material.id)
+        .maybeSingle();
+    if (testError) return res.status(500).json({ error: 'Failed to fetch test' });
+    if (!test) return res.json({ test: null });
+
+    const canManage = await canManageTraining(req);
+
+    const { data: questions, error: questionsError } = await supabase
+        .from('training_test_questions')
+        .select('*')
+        .eq('test_id', test.id)
+        .order('order_index', { ascending: true });
+    if (questionsError) return res.status(500).json({ error: 'Failed to fetch questions' });
+
+    const questionIds = questions.map((q) => q.id);
+    let options = [];
+    if (questionIds.length > 0) {
+        const optionColumns = canManage ? '*' : 'id, question_id, option_text, order_index';
+        const { data: optionsData, error: optionsError } = await supabase
+            .from('training_test_options')
+            .select(optionColumns)
+            .in('question_id', questionIds)
+            .order('order_index', { ascending: true });
+        if (optionsError) return res.status(500).json({ error: 'Failed to fetch options' });
+        options = optionsData;
+    }
+
+    const questionsWithOptions = questions.map((q) => ({
+        ...q,
+        options: options.filter((o) => o.question_id === q.id),
+    }));
+
+    res.json({ test: { ...test, questions: questionsWithOptions } });
+});
+
+// Full replace of the test: delete the old questions/options (cascade) and
+// insert the new set. Simpler and less error-prone than diffing individual
+// question/option edits for a first version.
+router.put('/:materialId/test', async (req, res) => {
+    if (!(await canManageTraining(req))) {
+        return res.status(403).json({ error: 'Not allowed to manage training tests' });
+    }
+
+    let material;
+    try {
+        material = await loadMaterialInOrg(req.params.materialId, req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to fetch training material' });
+    }
+    if (!material) return res.status(404).json({ error: 'Training material not found' });
+
+    const { passing_score_percent, questions } = req.body || {};
+    const validationError = validateTestPayload({ passing_score_percent, questions });
+    if (validationError) return res.status(400).json({ error: validationError });
+
+    const { error: deleteError } = await supabase.from('training_tests').delete().eq('material_id', material.id);
+    if (deleteError) return res.status(500).json({ error: 'Failed to replace test' });
+
+    const { data: test, error: testError } = await supabase
+        .from('training_tests')
+        .insert({
+            material_id: material.id,
+            passing_score_percent: passing_score_percent ?? 80,
+            created_by: req.user.id,
+        })
+        .select()
+        .single();
+    if (testError) return res.status(500).json({ error: 'Failed to create test' });
+
+    const { data: insertedQuestionsRaw, error: insertQuestionsError } = await supabase
+        .from('training_test_questions')
+        .insert(
+            questions.map((q, index) => ({
+                test_id: test.id,
+                question_text: q.question_text,
+                order_index: index,
+            }))
+        )
+        .select();
+    if (insertQuestionsError) {
+        await supabase.from('training_tests').delete().eq('id', test.id);
+        return res.status(500).json({ error: 'Failed to create questions' });
+    }
+    // Don't rely on the DB returning rows in insertion order — sort explicitly
+    // so option rows below get matched to the right question by array index.
+    const insertedQuestions = [...insertedQuestionsRaw].sort((a, b) => a.order_index - b.order_index);
+
+    const optionRows = questions.flatMap((q, qIndex) =>
+        q.options.map((o, oIndex) => ({
+            question_id: insertedQuestions[qIndex].id,
+            option_text: o.option_text,
+            is_correct: !!o.is_correct,
+            order_index: oIndex,
+        }))
+    );
+    const { data: insertedOptions, error: insertOptionsError } = await supabase
+        .from('training_test_options')
+        .insert(optionRows)
+        .select();
+    if (insertOptionsError) {
+        await supabase.from('training_tests').delete().eq('id', test.id);
+        return res.status(500).json({ error: 'Failed to create options' });
+    }
+
+    const questionsWithOptions = insertedQuestions.map((q) => ({
+        ...q,
+        options: insertedOptions.filter((o) => o.question_id === q.id),
+    }));
+
+    res.status(200).json({ test: { ...test, questions: questionsWithOptions } });
+});
+
+router.delete('/:materialId/test', async (req, res) => {
+    if (!(await canManageTraining(req))) {
+        return res.status(403).json({ error: 'Not allowed to manage training tests' });
+    }
+
+    let material;
+    try {
+        material = await loadMaterialInOrg(req.params.materialId, req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to fetch training material' });
+    }
+    if (!material) return res.status(404).json({ error: 'Training material not found' });
+
+    const { error } = await supabase.from('training_tests').delete().eq('material_id', material.id);
+    if (error) return res.status(500).json({ error: 'Failed to delete test' });
+    res.json({ deleted: true });
+});
+
+router.get('/:materialId/test/attempts/me', async (req, res) => {
+    let material;
+    try {
+        material = await loadMaterialInOrg(req.params.materialId, req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to fetch training material' });
+    }
+    if (!material) return res.status(404).json({ error: 'Training material not found' });
+
+    const { data: test, error: testError } = await supabase
+        .from('training_tests')
+        .select('id')
+        .eq('material_id', material.id)
+        .maybeSingle();
+    if (testError) return res.status(500).json({ error: 'Failed to fetch test' });
+    if (!test) return res.json({ attempts: [] });
+
+    const { data: attempts, error: attemptsError } = await supabase
+        .from('training_test_attempts')
+        .select('id, score_percent, passed, created_at')
+        .eq('test_id', test.id)
+        .eq('user_id', req.user.id)
+        .order('created_at', { ascending: false });
+    if (attemptsError) return res.status(500).json({ error: 'Failed to fetch attempts' });
+    res.json({ attempts });
+});
+
+router.post('/:materialId/test/attempts', async (req, res) => {
+    let material;
+    try {
+        material = await loadMaterialInOrg(req.params.materialId, req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to fetch training material' });
+    }
+    if (!material) return res.status(404).json({ error: 'Training material not found' });
+
+    const { data: test, error: testError } = await supabase
+        .from('training_tests')
+        .select('*')
+        .eq('material_id', material.id)
+        .maybeSingle();
+    if (testError) return res.status(500).json({ error: 'Failed to fetch test' });
+    if (!test) return res.status(404).json({ error: 'This material has no test' });
+
+    const { data: questions, error: questionsError } = await supabase
+        .from('training_test_questions')
+        .select('id')
+        .eq('test_id', test.id);
+    if (questionsError) return res.status(500).json({ error: 'Failed to fetch questions' });
+
+    const { answers } = req.body || {};
+    if (!Array.isArray(answers) || answers.length !== questions.length) {
+        return res.status(400).json({ error: `answers must include exactly ${questions.length} entries` });
+    }
+    const questionIdSet = new Set(questions.map((q) => q.id));
+    const answeredQuestionIds = new Set(answers.map((a) => a.question_id));
+    if (answeredQuestionIds.size !== questions.length || [...answeredQuestionIds].some((id) => !questionIdSet.has(id))) {
+        return res.status(400).json({ error: 'answers must cover exactly the questions in this test' });
+    }
+
+    const { data: options, error: optionsError } = await supabase
+        .from('training_test_options')
+        .select('id, question_id, is_correct')
+        .in('question_id', [...questionIdSet]);
+    if (optionsError) return res.status(500).json({ error: 'Failed to fetch options' });
+    const optionById = new Map(options.map((o) => [o.id, o]));
+
+    for (const a of answers) {
+        const option = optionById.get(a.selected_option_id);
+        if (!option || option.question_id !== a.question_id) {
+            return res.status(400).json({ error: 'selected_option_id does not belong to the given question' });
+        }
+    }
+
+    const correctCount = answers.filter((a) => optionById.get(a.selected_option_id).is_correct).length;
+    const scorePercent = Math.round((correctCount / questions.length) * 100);
+    const passed = scorePercent >= test.passing_score_percent;
+
+    const { data: attempt, error: attemptError } = await supabase
+        .from('training_test_attempts')
+        .insert({
+            test_id: test.id,
+            user_id: req.user.id,
+            organization_id: req.user.organizationId,
+            score_percent: scorePercent,
+            passed,
+        })
+        .select()
+        .single();
+    if (attemptError) return res.status(500).json({ error: 'Failed to record attempt' });
+
+    const answerRows = answers.map((a) => ({
+        attempt_id: attempt.id,
+        question_id: a.question_id,
+        selected_option_id: a.selected_option_id,
+        is_correct: optionById.get(a.selected_option_id).is_correct,
+    }));
+    const { error: answersError } = await supabase.from('training_test_attempt_answers').insert(answerRows);
+    if (answersError) return res.status(500).json({ error: 'Failed to record attempt answers' });
+
+    res.status(201).json({
+        attempt,
+        results: answerRows.map((r) => ({
+            question_id: r.question_id,
+            selected_option_id: r.selected_option_id,
+            is_correct: r.is_correct,
+            correct_option_id: options.find((o) => o.question_id === r.question_id && o.is_correct)?.id,
+        })),
+    });
 });
 
 export default router;

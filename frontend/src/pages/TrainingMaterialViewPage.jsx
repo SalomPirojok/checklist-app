@@ -25,6 +25,10 @@ export default function TrainingMaterialViewPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const [test, setTest] = useState(null);
+    const [myAttempts, setMyAttempts] = useState([]);
+    const [testLoading, setTestLoading] = useState(true);
+
     useEffect(() => {
         let cancelled = false;
         api(`/api/training/${id}`)
@@ -35,6 +39,23 @@ export default function TrainingMaterialViewPage() {
             cancelled = true;
         };
     }, [api, id]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setTestLoading(true);
+        api(`/api/training/${id}/test`)
+            .then((res) => !cancelled && setTest(res.test))
+            .catch(() => {})
+            .finally(() => !cancelled && setTestLoading(false));
+        if (user.role === 'employee') {
+            api(`/api/training/${id}/test/attempts/me`)
+                .then((res) => !cancelled && setMyAttempts(res.attempts))
+                .catch(() => {});
+        }
+        return () => {
+            cancelled = true;
+        };
+    }, [api, id, user.role]);
 
     async function handleArchive() {
         if (!confirm('Архивировать этот материал?')) return;
@@ -89,6 +110,44 @@ export default function TrainingMaterialViewPage() {
                             Архивировать
                         </button>
                     )}
+                </div>
+            )}
+
+            <hr />
+
+            {!testLoading && canManage && (
+                <div className="training-test-section">
+                    <h2>Тест</h2>
+                    {test ? (
+                        <>
+                            <p className="hint">
+                                Вопросов: {test.questions.length}. Проходной балл: {test.passing_score_percent}%.
+                            </p>
+                            <button type="button" className="btn btn--ghost" onClick={() => navigate(`/training/${id}/test/edit`)}>
+                                Редактировать тест
+                            </button>
+                        </>
+                    ) : (
+                        <button type="button" className="btn" onClick={() => navigate(`/training/${id}/test/edit`)}>
+                            + Добавить тест
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {!testLoading && user.role === 'employee' && test && (
+                <div className="training-test-section">
+                    <h2>Тест</h2>
+                    <p className="hint">Вопросов: {test.questions.length}. Проходной балл: {test.passing_score_percent}%.</p>
+                    {myAttempts.length > 0 && (
+                        <p className="hint">
+                            Ваш лучший результат: {Math.max(...myAttempts.map((a) => a.score_percent))}%
+                            {myAttempts.some((a) => a.passed) ? ' — пройден' : ' — не пройден'}
+                        </p>
+                    )}
+                    <button type="button" className="btn" onClick={() => navigate(`/training/${id}/test/take`)}>
+                        {myAttempts.length > 0 ? 'Пройти снова' : 'Пройти тест'}
+                    </button>
                 </div>
             )}
         </div>
