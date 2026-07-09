@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { uploadAssignmentItemPhoto } from '../lib/storage.js';
+import { uploadAssignmentItemPhoto, verifyPhotoBelongsToItem } from '../lib/storage.js';
 
 const router = Router();
 
@@ -328,8 +328,14 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     if (is_done !== undefined) {
         const willBeDone = !!is_done;
         const finalPhotoUrl = photo_url !== undefined ? photo_url : item.photo_url;
-        if (willBeDone && item.template_item.requires_photo && !finalPhotoUrl) {
-            return res.status(400).json({ error: 'This item requires a photo before it can be marked done' });
+        if (willBeDone && item.template_item.requires_photo) {
+            if (!finalPhotoUrl) {
+                return res.status(400).json({ error: 'This item requires a photo before it can be marked done' });
+            }
+            const verified = await verifyPhotoBelongsToItem(finalPhotoUrl, assignment.id, item.id);
+            if (!verified) {
+                return res.status(400).json({ error: 'Photo could not be verified — please upload it again' });
+            }
         }
         updates.is_done = willBeDone;
         updates.done_at = willBeDone ? new Date().toISOString() : null;

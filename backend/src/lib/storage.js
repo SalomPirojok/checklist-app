@@ -32,3 +32,31 @@ export async function uploadAssignmentItemPhoto({ assignmentId, itemId, buffer, 
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
     return data.publicUrl;
 }
+
+// Defense in depth: a client could otherwise mark a requires_photo item done by
+// simply sending an arbitrary photo_url string, without ever uploading anything.
+// This confirms the URL both follows our own naming convention for this exact
+// assignment/item AND actually exists in storage.
+export async function verifyPhotoBelongsToItem(photoUrl, assignmentId, itemId) {
+    let pathname;
+    try {
+        pathname = new URL(photoUrl).pathname;
+    } catch {
+        return false;
+    }
+
+    const marker = `/${BUCKET}/`;
+    const markerIndex = pathname.indexOf(marker);
+    if (markerIndex === -1) return false;
+
+    const objectPath = pathname.slice(markerIndex + marker.length); // "{assignmentId}/{filename}"
+    const expectedFolder = `${assignmentId}/`;
+    if (!objectPath.startsWith(expectedFolder)) return false;
+
+    const filename = objectPath.slice(expectedFolder.length);
+    if (!filename.startsWith(`${itemId}-`)) return false;
+
+    const { data, error } = await supabase.storage.from(BUCKET).list(assignmentId, { search: filename });
+    if (error) return false;
+    return (data || []).some((f) => f.name === filename);
+}
