@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import StatTile from '../components/StatTile';
@@ -14,13 +15,13 @@ const STAT_ORDER = [
 function AssignmentRow({ assignment, showDueAt }) {
     return (
         <li className="list-row">
-            <div>
+            <Link to={`/assignments/${assignment.id}`} className="list-row__title--link">
                 <div className="list-row__title">{assignment.template?.title}</div>
                 <div className="hint">
                     {assignment.assignee?.full_name}
                     {showDueAt && ` · дедлайн ${new Date(assignment.due_at).toLocaleString('ru-RU')}`}
                 </div>
-            </div>
+            </Link>
             <StatusBadge status={assignment.status} />
         </li>
     );

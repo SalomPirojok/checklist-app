@@ -7,6 +7,7 @@ import DashboardPage from './pages/DashboardPage';
 import EmployeesPage from './pages/EmployeesPage';
 import TemplatesPage from './pages/TemplatesPage';
 import TemplateEditorPage from './pages/TemplateEditorPage';
+import AssignmentDetailPage from './pages/AssignmentDetailPage';
 import EmployeeLayout from './layouts/EmployeeLayout';
 import EmployeeChecklistsPage from './pages/EmployeeChecklistsPage';
 import EmployeeChecklistDetailPage from './pages/EmployeeChecklistDetailPage';
@@ -29,6 +30,7 @@ function AppContent() {
                         <Route path="/templates" element={<TemplatesPage />} />
                         <Route path="/templates/new" element={<TemplateEditorPage />} />
                         <Route path="/templates/:id" element={<TemplateEditorPage />} />
+                        <Route path="/assignments/:id" element={<AssignmentDetailPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 ) : (
