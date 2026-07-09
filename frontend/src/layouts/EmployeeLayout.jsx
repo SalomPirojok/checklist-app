@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApiClient } from '../api/useApiClient';
 import CheckInScreen from '../pages/CheckInScreen';
 import AttendanceBar from '../components/AttendanceBar';
+
+function tabClass({ isActive }) {
+    return isActive ? 'tab-bar__item tab-bar__item--active' : 'tab-bar__item';
+}
 
 export default function EmployeeLayout() {
     const { user } = useAuth();
@@ -45,6 +49,16 @@ export default function EmployeeLayout() {
                 </div>
             </header>
             <AttendanceBar attendance={attendance} onCheckedOut={loadAttendance} />
+
+            <nav className="tab-bar">
+                <NavLink to="/" end className={tabClass}>
+                    Чек-листы
+                </NavLink>
+                <NavLink to="/training" className={tabClass}>
+                    Обучение
+                </NavLink>
+            </nav>
+
             <main className="app-main">
                 <Outlet />
             </main>

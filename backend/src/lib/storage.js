@@ -3,6 +3,7 @@ import { supabase } from './supabase.js';
 const CHECKLIST_BUCKET = 'checklist-photos';
 const ATTENDANCE_BUCKET = 'attendance-photos';
 const SIGNATURE_BUCKET = 'checklist-signatures';
+const TRAINING_BUCKET = 'training-files';
 
 const PHOTO_BUCKET_OPTIONS = {
     public: true,
@@ -10,22 +11,38 @@ const PHOTO_BUCKET_OPTIONS = {
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
 };
 
+const TRAINING_BUCKET_OPTIONS = {
+    public: true,
+    fileSizeLimit: '50MB',
+    allowedMimeTypes: [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/heic',
+        'image/heif',
+        'video/mp4',
+        'video/quicktime',
+        'video/webm',
+        'application/pdf',
+    ],
+};
+
 const bucketsReady = new Set();
 
-async function ensureBucket(bucket) {
+async function ensureBucket(bucket, options) {
     if (bucketsReady.has(bucket)) return;
     const { data: buckets, error } = await supabase.storage.listBuckets();
     if (error) throw new Error(`Failed to list storage buckets: ${error.message}`);
 
     if (!buckets.some((b) => b.name === bucket)) {
-        const { error: createError } = await supabase.storage.createBucket(bucket, PHOTO_BUCKET_OPTIONS);
+        const { error: createError } = await supabase.storage.createBucket(bucket, options);
         if (createError) throw new Error(`Failed to create storage bucket: ${createError.message}`);
     }
     bucketsReady.add(bucket);
 }
 
-async function uploadPhoto(bucket, path, buffer, contentType) {
-    await ensureBucket(bucket);
+async function uploadPhoto(bucket, path, buffer, contentType, options = PHOTO_BUCKET_OPTIONS) {
+    await ensureBucket(bucket, options);
 
     const { error: uploadError } = await supabase.storage.from(bucket).upload(path, buffer, {
         contentType,
@@ -107,4 +124,13 @@ export async function verifySignatureBelongsToAssignment(photoUrl, assignmentId)
 
     const filename = objectPath.slice(expectedFolder.length);
     return photoExistsAtPath(SIGNATURE_BUCKET, assignmentId, filename);
+}
+
+// Training materials are only ever written by a trusted owner/manager (never
+// employee-submitted), so — unlike the checklist/attendance/signature photos —
+// there's no untrusted client trying to fake completion evidence here, and we
+// skip the extra existence-verification round trip.
+export async function uploadTrainingFile({ organizationId, buffer, contentType, extension }) {
+    const path = `${organizationId}/${Date.now()}.${extension}`;
+    return uploadPhoto(TRAINING_BUCKET, path, buffer, contentType, TRAINING_BUCKET_OPTIONS);
 }

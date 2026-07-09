@@ -9,5 +9,5 @@ export function useApiClient() {
 
 export function useApiUpload() {
     const { token } = useAuth();
-    return useCallback((path, formData) => apiUpload(path, { formData, token }), [token]);
+    return useCallback((path, formData, method = 'POST') => apiUpload(path, { formData, token, method }), [token]);
 }

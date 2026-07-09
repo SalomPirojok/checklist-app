@@ -11,6 +11,9 @@ import AssignmentDetailPage from './pages/AssignmentDetailPage';
 import EmployeeLayout from './layouts/EmployeeLayout';
 import EmployeeChecklistsPage from './pages/EmployeeChecklistsPage';
 import EmployeeChecklistDetailPage from './pages/EmployeeChecklistDetailPage';
+import TrainingPage from './pages/TrainingPage';
+import TrainingMaterialViewPage from './pages/TrainingMaterialViewPage';
+import TrainingMaterialEditorPage from './pages/TrainingMaterialEditorPage';
 
 function AppContent() {
     const { status, error, user } = useAuth();
@@ -31,12 +34,18 @@ function AppContent() {
                         <Route path="/templates/new" element={<TemplateEditorPage />} />
                         <Route path="/templates/:id" element={<TemplateEditorPage />} />
                         <Route path="/assignments/:id" element={<AssignmentDetailPage />} />
+                        <Route path="/training" element={<TrainingPage />} />
+                        <Route path="/training/new" element={<TrainingMaterialEditorPage />} />
+                        <Route path="/training/:id/edit" element={<TrainingMaterialEditorPage />} />
+                        <Route path="/training/:id" element={<TrainingMaterialViewPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 ) : (
                     <Route element={<EmployeeLayout />}>
                         <Route path="/" element={<EmployeeChecklistsPage />} />
                         <Route path="/assignments/:id" element={<EmployeeChecklistDetailPage />} />
+                        <Route path="/training" element={<TrainingPage />} />
+                        <Route path="/training/:id" element={<TrainingMaterialViewPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 )}

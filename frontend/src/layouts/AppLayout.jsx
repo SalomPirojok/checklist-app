@@ -28,6 +28,9 @@ export default function AppLayout() {
                 <NavLink to="/templates" className={tabClass}>
                     Шаблоны
                 </NavLink>
+                <NavLink to="/training" className={tabClass}>
+                    Обучение
+                </NavLink>
             </nav>
 
             <main className="app-main">

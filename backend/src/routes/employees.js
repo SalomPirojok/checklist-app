@@ -99,7 +99,7 @@ router.patch('/:id', async (req, res) => {
         return res.status(403).json({ error: 'Not allowed to modify this user' });
     }
 
-    const { full_name, username, role, is_active } = req.body || {};
+    const { full_name, username, role, is_active, can_manage_training } = req.body || {};
     const updates = {};
 
     if (full_name !== undefined) updates.full_name = full_name;
@@ -110,6 +110,14 @@ router.patch('/:id', async (req, res) => {
             return res.status(403).json({ error: 'Not allowed to assign this role' });
         }
         updates.role = role;
+    }
+    if (can_manage_training !== undefined) {
+        // Only the owner grants/revokes training-management rights, even though
+        // an owner can already edit managers more broadly via canActOnRole above.
+        if (req.user.role !== 'owner') {
+            return res.status(403).json({ error: 'Only the owner can manage training permissions' });
+        }
+        updates.can_manage_training = !!can_manage_training;
     }
 
     if (Object.keys(updates).length === 0) {

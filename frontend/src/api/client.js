@@ -19,9 +19,9 @@ export async function apiFetch(path, { method = 'GET', body, token } = {}) {
 
 // No Content-Type header here on purpose: the browser sets multipart/form-data
 // with the correct boundary itself when the body is a FormData instance.
-export async function apiUpload(path, { formData, token }) {
+export async function apiUpload(path, { formData, token, method = 'POST' }) {
     const res = await fetch(`${API_URL}${path}`, {
-        method: 'POST',
+        method,
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: formData,
     });

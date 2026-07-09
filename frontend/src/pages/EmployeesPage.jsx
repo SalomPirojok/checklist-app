@@ -103,6 +103,18 @@ export default function EmployeesPage() {
         }
     }
 
+    async function handleToggleTraining(employee) {
+        try {
+            await api(`/api/employees/${employee.id}`, {
+                method: 'PATCH',
+                body: { can_manage_training: !employee.can_manage_training },
+            });
+            await load();
+        } catch (err) {
+            setListError(err.message);
+        }
+    }
+
     return (
         <div className="page">
             <div className="page-header">
@@ -144,6 +156,16 @@ export default function EmployeesPage() {
                                         {ROLE_LABELS[employee.role] || employee.role}
                                         {employee.username && ` · @${employee.username}`}
                                     </div>
+                                    {currentUser.role === 'owner' && employee.role === 'manager' && (
+                                        <label className="hint" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={!!employee.can_manage_training}
+                                                onChange={() => handleToggleTraining(employee)}
+                                            />
+                                            Может управлять обучением
+                                        </label>
+                                    )}
                                 </div>
                                 {canAct && (
                                     <div className="list-row__actions">
