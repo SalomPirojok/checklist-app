@@ -27,12 +27,47 @@ function AssignmentRow({ assignment, showDueAt }) {
     );
 }
 
+function formatTime(isoString) {
+    return new Date(isoString).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+function AttendancePhoto({ record }) {
+    if (!record) return <span className="hint">не отмечен</span>;
+    return (
+        <a href={record.photo_url} target="_blank" rel="noopener noreferrer" className="attendance-photo-link">
+            <img src={record.photo_url} alt="" className="attendance-photo-thumb" />
+            <span>{formatTime(record.created_at)}</span>
+        </a>
+    );
+}
+
+function AttendanceRow({ entry }) {
+    return (
+        <li className="list-row">
+            <div className="list-row__title">{entry.user.full_name}</div>
+            <div className="attendance-row__times">
+                <div>
+                    <div className="hint">Приход</div>
+                    <AttendancePhoto record={entry.check_in} />
+                </div>
+                <div>
+                    <div className="hint">Уход</div>
+                    <AttendancePhoto record={entry.check_out} />
+                </div>
+            </div>
+        </li>
+    );
+}
+
 export default function DashboardPage() {
     const api = useApiClient();
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
     const showSlowHint = useDelayedFlag(loading, 4000);
+
+    const [attendance, setAttendance] = useState(null);
+    const [attendanceError, setAttendanceError] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -46,6 +81,20 @@ export default function DashboardPage() {
             })
             .finally(() => {
                 if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [api]);
+
+    useEffect(() => {
+        let cancelled = false;
+        api('/api/attendance/organization/today')
+            .then((res) => {
+                if (!cancelled) setAttendance(res);
+            })
+            .catch((err) => {
+                if (!cancelled) setAttendanceError(err.message);
             });
         return () => {
             cancelled = true;
@@ -105,6 +154,22 @@ export default function DashboardPage() {
                     <ul className="list">
                         {data.overdue_assignments.map((a) => (
                             <AssignmentRow key={a.id} assignment={a} showDueAt />
+                        ))}
+                    </ul>
+                )}
+            </section>
+
+            <section>
+                <h2>Посещаемость на сегодня</h2>
+                {attendanceError && <p className="error-text">{attendanceError}</p>}
+                {!attendanceError && !attendance && <p className="hint">Загрузка...</p>}
+                {attendance && attendance.attendance.length === 0 && (
+                    <p className="hint">В организации пока нет сотрудников.</p>
+                )}
+                {attendance && attendance.attendance.length > 0 && (
+                    <ul className="list">
+                        {attendance.attendance.map((entry) => (
+                            <AttendanceRow key={entry.user.id} entry={entry} />
                         ))}
                     </ul>
                 )}

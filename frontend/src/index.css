@@ -521,3 +521,39 @@ body {
     color: var(--tg-theme-text-color, #1c1c1e);
     resize: vertical;
 }
+
+/* --- attendance --- */
+
+.attendance-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--tg-theme-hint-color, #e1e0d9);
+    background: var(--tg-theme-secondary-bg-color, #f2f2f7);
+}
+
+.attendance-row__times {
+    display: flex;
+    gap: 16px;
+    flex-shrink: 0;
+}
+
+.attendance-photo-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: inherit;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.attendance-photo-thumb {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+}
