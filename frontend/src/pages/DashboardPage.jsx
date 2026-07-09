@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApiClient } from '../api/useApiClient';
+import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import StatTile from '../components/StatTile';
 import StatusBadge from '../components/StatusBadge';
 
@@ -30,6 +31,7 @@ export default function DashboardPage() {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+    const showSlowHint = useDelayedFlag(loading, 4000);
 
     useEffect(() => {
         let cancelled = false;
@@ -49,7 +51,21 @@ export default function DashboardPage() {
         };
     }, [api]);
 
-    if (loading) return <p>Загрузка...</p>;
+    if (loading) {
+        return (
+            <p>
+                Загрузка...
+                {showSlowHint && (
+                    <>
+                        {' '}
+                        <span className="hint">
+                            Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.
+                        </span>
+                    </>
+                )}
+            </p>
+        );
+    }
     if (error) return <p className="error-text">{error}</p>;
     if (!data) return null;
 

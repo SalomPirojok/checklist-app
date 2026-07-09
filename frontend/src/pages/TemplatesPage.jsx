@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
+import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import AssignChecklistModal from '../components/AssignChecklistModal';
 
 export default function TemplatesPage() {
@@ -9,6 +10,7 @@ export default function TemplatesPage() {
     const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const showSlowHint = useDelayedFlag(loading, 4000);
     const [assigningTemplate, setAssigningTemplate] = useState(null);
     const [assignedMessage, setAssignedMessage] = useState(null);
 
@@ -54,7 +56,19 @@ export default function TemplatesPage() {
             </div>
 
             {assignedMessage && <p className="success-text">{assignedMessage}</p>}
-            {loading && <p>Загрузка...</p>}
+            {loading && (
+                <p>
+                    Загрузка...
+                    {showSlowHint && (
+                        <>
+                            {' '}
+                            <span className="hint">
+                                Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.
+                            </span>
+                        </>
+                    )}
+                </p>
+            )}
             {error && <p className="error-text">{error}</p>}
 
             {!loading && !error && (

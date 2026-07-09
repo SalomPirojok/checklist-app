@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApiClient } from '../api/useApiClient';
 import { useAuth } from '../context/AuthContext';
+import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import { ROLE_LABELS, canActOnRole } from '../constants';
 
 const emptyForm = { telegram_id: '', full_name: '', username: '', role: 'employee' };
@@ -12,6 +13,7 @@ export default function EmployeesPage() {
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState(null);
+    const showSlowHint = useDelayedFlag(loading, 4000);
 
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState(emptyForm);
@@ -45,7 +47,7 @@ export default function EmployeesPage() {
 
     function openEditForm(employee) {
         setForm({
-            telegram_id: String(employee.telegram_id),
+            telegram_id: employee.telegram_id ? String(employee.telegram_id) : '',
             full_name: employee.full_name,
             username: employee.username || '',
             role: employee.role,
@@ -57,8 +59,14 @@ export default function EmployeesPage() {
 
     async function handleSubmit(e) {
         e.preventDefault();
-        setSubmitting(true);
         setFormError(null);
+
+        if (!editingId && !form.telegram_id && !form.username) {
+            setFormError('Укажите Telegram ID, либо хотя бы username для приглашения');
+            return;
+        }
+
+        setSubmitting(true);
         try {
             if (editingId) {
                 await api(`/api/employees/${editingId}`, {
@@ -69,7 +77,7 @@ export default function EmployeesPage() {
                 await api('/api/employees', {
                     method: 'POST',
                     body: {
-                        telegram_id: Number(form.telegram_id),
+                        telegram_id: form.telegram_id ? Number(form.telegram_id) : undefined,
                         full_name: form.full_name,
                         username: form.username || undefined,
                         role: form.role,
@@ -104,7 +112,19 @@ export default function EmployeesPage() {
                 </button>
             </div>
 
-            {loading && <p>Загрузка...</p>}
+            {loading && (
+                <p>
+                    Загрузка...
+                    {showSlowHint && (
+                        <>
+                            {' '}
+                            <span className="hint">
+                                Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.
+                            </span>
+                        </>
+                    )}
+                </p>
+            )}
             {listError && <p className="error-text">{listError}</p>}
 
             {!loading && !listError && (
@@ -118,6 +138,7 @@ export default function EmployeesPage() {
                                     <div className="list-row__title">
                                         {employee.full_name}
                                         {!employee.is_active && <span className="tag">неактивен</span>}
+                                        {!employee.telegram_id && <span className="tag tag--pending">не подключён</span>}
                                     </div>
                                     <div className="hint">
                                         {ROLE_LABELS[employee.role] || employee.role}
@@ -152,10 +173,9 @@ export default function EmployeesPage() {
                         <form onSubmit={handleSubmit} className="form">
                             {!editingId && (
                                 <label className="field">
-                                    <span>Telegram ID</span>
+                                    <span>Telegram ID (необязательно)</span>
                                     <input
                                         type="number"
-                                        required
                                         value={form.telegram_id}
                                         onChange={(e) => setForm({ ...form, telegram_id: e.target.value })}
                                     />
@@ -171,12 +191,18 @@ export default function EmployeesPage() {
                                 />
                             </label>
                             <label className="field">
-                                <span>Username (без @)</span>
+                                <span>Username (без @){!editingId && !form.telegram_id ? ' — обязательно' : ''}</span>
                                 <input
                                     type="text"
                                     value={form.username}
                                     onChange={(e) => setForm({ ...form, username: e.target.value })}
                                 />
+                                {!editingId && (
+                                    <span className="hint">
+                                        Если не знаете Telegram ID — укажите username. Сотрудник привяжется сам при
+                                        первом открытии приложения.
+                                    </span>
+                                )}
                             </label>
                             <label className="field">
                                 <span>Роль</span>

@@ -37,8 +37,13 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     const { telegram_id, full_name, username, role = 'employee' } = req.body || {};
 
-    if (!telegram_id || !full_name) {
-        return res.status(400).json({ error: 'telegram_id and full_name are required' });
+    if (!full_name) {
+        return res.status(400).json({ error: 'full_name is required' });
+    }
+    // telegram_id may be unknown yet — the owner can invite someone by username
+    // alone, and their telegram_id gets filled in on their first login.
+    if (!telegram_id && !username) {
+        return res.status(400).json({ error: 'Provide telegram_id, or at least a username to invite by' });
     }
     if (!ASSIGNABLE_ROLES.includes(role)) {
         return res.status(400).json({ error: `role must be one of: ${ASSIGNABLE_ROLES.join(', ')}` });
@@ -47,10 +52,21 @@ router.post('/', async (req, res) => {
         return res.status(403).json({ error: 'Not allowed to assign this role' });
     }
 
+    if (!telegram_id && username) {
+        const { data: pending, error: pendingError } = await supabase
+            .from('users')
+            .select('id')
+            .is('telegram_id', null)
+            .ilike('username', username)
+            .maybeSingle();
+        if (pendingError) return res.status(500).json({ error: 'Failed to check existing invites' });
+        if (pending) return res.status(409).json({ error: 'This username has already been invited' });
+    }
+
     const { data, error } = await supabase
         .from('users')
         .insert({
-            telegram_id,
+            telegram_id: telegram_id || null,
             full_name,
             username: username || null,
             role,

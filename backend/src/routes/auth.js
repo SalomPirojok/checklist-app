@@ -21,17 +21,17 @@ router.post('/telegram', async (req, res) => {
 
     const telegramId = telegramUser.id;
     const fullName = [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(' ') || 'Без имени';
+    const telegramUsername = telegramUser.username || null;
 
+    // 1. Already linked: log straight in.
     const { data: existingUser, error: lookupError } = await supabase
         .from('users')
         .select('*')
         .eq('telegram_id', telegramId)
         .maybeSingle();
-
     if (lookupError) {
         return res.status(500).json({ error: 'Failed to look up user' });
     }
-
     if (existingUser) {
         if (!existingUser.is_active) {
             return res.status(403).json({ error: 'User is deactivated' });
@@ -40,13 +40,64 @@ router.post('/telegram', async (req, res) => {
         return res.json({ token, user: existingUser });
     }
 
-    // First time this telegram_id logs in: bootstrap a new organization and make them the owner.
+    // 2. Not linked yet: maybe the owner pre-added this person by username, before
+    // they ever opened the bot. Claim that pending row instead of creating a new one.
+    if (telegramUsername) {
+        const { data: pendingUser, error: pendingError } = await supabase
+            .from('users')
+            .select('*')
+            .is('telegram_id', null)
+            .ilike('username', telegramUsername)
+            .maybeSingle();
+        if (pendingError) {
+            return res.status(500).json({ error: 'Failed to look up pending invite' });
+        }
+        if (pendingUser) {
+            if (!pendingUser.is_active) {
+                return res.status(403).json({ error: 'User is deactivated' });
+            }
+            // Atomic claim: only succeeds if nobody else claimed this row first.
+            const { data: claimedUser, error: claimError } = await supabase
+                .from('users')
+                .update({ telegram_id: telegramId })
+                .eq('id', pendingUser.id)
+                .is('telegram_id', null)
+                .select()
+                .maybeSingle();
+            if (claimError) {
+                if (claimError.code === '23505') {
+                    return res.status(409).json({ error: 'This Telegram account is already linked to another user' });
+                }
+                return res.status(500).json({ error: 'Failed to link Telegram account' });
+            }
+            if (claimedUser) {
+                const token = signAppToken(claimedUser);
+                return res.json({ token, user: claimedUser });
+            }
+            // Someone else claimed it a moment earlier — fall through to the "not found" checks below.
+        }
+    }
+
+    // 3. Nobody matched. Only the very first user of the whole deployment gets to
+    // self-provision a new organization; everyone after that must be invited.
+    const { count: organizationCount, error: countError } = await supabase
+        .from('organizations')
+        .select('*', { count: 'exact', head: true });
+    if (countError) {
+        return res.status(500).json({ error: 'Failed to check existing organizations' });
+    }
+
+    if (organizationCount > 0) {
+        return res.status(404).json({
+            error: 'Пользователь не найден. Обратитесь к владельцу вашей организации, чтобы вас добавили.',
+        });
+    }
+
     const { data: newOrg, error: orgError } = await supabase
         .from('organizations')
         .insert({ name: `${fullName} — организация` })
         .select()
         .single();
-
     if (orgError) {
         return res.status(500).json({ error: 'Failed to create organization' });
     }
@@ -56,7 +107,7 @@ router.post('/telegram', async (req, res) => {
         .insert({
             telegram_id: telegramId,
             full_name: fullName,
-            username: telegramUser.username || null,
+            username: telegramUsername,
             role: 'owner',
             organization_id: newOrg.id,
         })
