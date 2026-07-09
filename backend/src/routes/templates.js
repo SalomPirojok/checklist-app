@@ -18,6 +18,20 @@ async function loadTemplateInOrg(templateId, organizationId) {
     return data;
 }
 
+const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function validateAutoAssignFields({ auto_assign_time, due_offset_minutes }) {
+    if (auto_assign_time !== undefined && auto_assign_time !== null && !TIME_PATTERN.test(auto_assign_time)) {
+        return 'auto_assign_time must be in HH:MM format';
+    }
+    if (due_offset_minutes !== undefined && due_offset_minutes !== null) {
+        if (!Number.isInteger(due_offset_minutes) || due_offset_minutes <= 0) {
+            return 'due_offset_minutes must be a positive integer';
+        }
+    }
+    return null;
+}
+
 function normalizeItems(items, templateId) {
     return items.map((item, index) => ({
         template_id: templateId,
@@ -65,7 +79,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { title, description, items = [] } = req.body || {};
+    const { title, description, items = [], auto_assign_enabled, auto_assign_time, due_offset_minutes } = req.body || {};
 
     if (!title) {
         return res.status(400).json({ error: 'title is required' });
@@ -76,15 +90,22 @@ router.post('/', async (req, res) => {
     if (items.some((item) => !item.title)) {
         return res.status(400).json({ error: 'every item requires a title' });
     }
+    const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes });
+    if (autoAssignError) return res.status(400).json({ error: autoAssignError });
+
+    const templateInsert = {
+        organization_id: req.user.organizationId,
+        title,
+        description: description || null,
+        created_by: req.user.id,
+    };
+    if (auto_assign_enabled !== undefined) templateInsert.auto_assign_enabled = !!auto_assign_enabled;
+    if (auto_assign_time) templateInsert.auto_assign_time = auto_assign_time;
+    if (due_offset_minutes !== undefined && due_offset_minutes !== null) templateInsert.due_offset_minutes = due_offset_minutes;
 
     const { data: template, error: templateError } = await supabase
         .from('checklist_templates')
-        .insert({
-            organization_id: req.user.organizationId,
-            title,
-            description: description || null,
-            created_by: req.user.id,
-        })
+        .insert(templateInsert)
         .select()
         .single();
 
@@ -117,11 +138,17 @@ router.patch('/:id', async (req, res) => {
     }
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const { title, description, is_archived } = req.body || {};
+    const { title, description, is_archived, auto_assign_enabled, auto_assign_time, due_offset_minutes } = req.body || {};
+    const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes });
+    if (autoAssignError) return res.status(400).json({ error: autoAssignError });
+
     const updates = {};
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description;
     if (is_archived !== undefined) updates.is_archived = is_archived;
+    if (auto_assign_enabled !== undefined) updates.auto_assign_enabled = !!auto_assign_enabled;
+    if (auto_assign_time) updates.auto_assign_time = auto_assign_time;
+    if (due_offset_minutes !== undefined && due_offset_minutes !== null) updates.due_offset_minutes = due_offset_minutes;
 
     if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: 'No valid fields to update' });

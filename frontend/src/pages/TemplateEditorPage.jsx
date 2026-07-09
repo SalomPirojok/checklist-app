@@ -14,6 +14,9 @@ export default function TemplateEditorPage() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [items, setItems] = useState([emptyItem()]);
+    const [autoAssignEnabled, setAutoAssignEnabled] = useState(false);
+    const [autoAssignTime, setAutoAssignTime] = useState('09:00');
+    const [dueOffsetMinutes, setDueOffsetMinutes] = useState(120);
     const [loading, setLoading] = useState(!isNew);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -26,6 +29,9 @@ export default function TemplateEditorPage() {
                 if (cancelled) return;
                 setTitle(res.template.title);
                 setDescription(res.template.description || '');
+                setAutoAssignEnabled(res.template.auto_assign_enabled);
+                setAutoAssignTime((res.template.auto_assign_time || '09:00').slice(0, 5));
+                setDueOffsetMinutes(res.template.due_offset_minutes ?? 120);
                 setItems(
                     res.items.length
                         ? res.items.map((item) => ({
@@ -68,17 +74,27 @@ export default function TemplateEditorPage() {
             setError('Добавьте хотя бы один пункт с названием.');
             return;
         }
+        if (autoAssignEnabled && (!Number.isInteger(dueOffsetMinutes) || dueOffsetMinutes <= 0)) {
+            setError('Дедлайн (в минутах) должен быть положительным целым числом.');
+            return;
+        }
+
+        const autoAssignFields = {
+            auto_assign_enabled: autoAssignEnabled,
+            auto_assign_time: autoAssignTime,
+            due_offset_minutes: dueOffsetMinutes,
+        };
 
         setSaving(true);
         try {
             if (isNew) {
                 const res = await api('/api/templates', {
                     method: 'POST',
-                    body: { title, description, items: cleanItems },
+                    body: { title, description, items: cleanItems, ...autoAssignFields },
                 });
                 navigate(`/templates/${res.template.id}`, { replace: true });
             } else {
-                await api(`/api/templates/${id}`, { method: 'PATCH', body: { title, description } });
+                await api(`/api/templates/${id}`, { method: 'PATCH', body: { title, description, ...autoAssignFields } });
                 await api(`/api/templates/${id}/items`, { method: 'PUT', body: { items: cleanItems } });
                 navigate('/templates');
             }
@@ -148,6 +164,39 @@ export default function TemplateEditorPage() {
                     <span>Описание</span>
                     <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
                 </label>
+
+                <label className="checkbox-field">
+                    <input
+                        type="checkbox"
+                        checked={autoAssignEnabled}
+                        onChange={(e) => setAutoAssignEnabled(e.target.checked)}
+                    />
+                    <span>Автоназначение всем активным сотрудникам каждый день</span>
+                </label>
+
+                {autoAssignEnabled && (
+                    <div className="auto-assign-fields">
+                        <label className="field">
+                            <span>Время создания назначения</span>
+                            <input
+                                type="time"
+                                required
+                                value={autoAssignTime}
+                                onChange={(e) => setAutoAssignTime(e.target.value)}
+                            />
+                        </label>
+                        <label className="field">
+                            <span>Дедлайн через (минут)</span>
+                            <input
+                                type="number"
+                                min="1"
+                                required
+                                value={dueOffsetMinutes}
+                                onChange={(e) => setDueOffsetMinutes(Number(e.target.value))}
+                            />
+                        </label>
+                    </div>
+                )}
 
                 <h2>Пункты</h2>
                 {segments.map((segment, segIndex) =>

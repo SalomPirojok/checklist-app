@@ -634,3 +634,19 @@ body {
     background: #ffffff;
     display: block;
 }
+
+/* --- auto-assign --- */
+
+.auto-assign-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 10px;
+    background: var(--tg-theme-secondary-bg-color, #f2f2f7);
+    border-radius: 10px;
+}
+
+.auto-assign-fields .field {
+    flex: 1;
+    min-width: 140px;
+}
