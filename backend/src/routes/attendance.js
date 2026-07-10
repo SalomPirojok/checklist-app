@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { uploadAttendancePhoto, verifyAttendancePhotoBelongsToUser } from '../lib/storage.js';
 import { computeLateness } from '../lib/lateness.js';
+import { resolveScheduleForDepartment } from '../lib/schedule.js';
 import { sendTelegramMessage } from '../lib/telegramNotify.js';
 
 const router = Router();
@@ -124,16 +125,22 @@ router.post('/', upload.single('photo'), async (req, res) => {
         .single();
     if (insertError) return res.status(500).json({ error: 'Failed to record attendance' });
 
-    const { data: org, error: orgFetchError } = await supabase
-        .from('organizations')
-        .select('auto_penalty_enabled, late_threshold_minutes, late_penalty_amount, shift_start_time')
-        .eq('id', req.user.organizationId)
-        .single();
+    const [{ data: org, error: orgFetchError }, { data: employee, error: employeeError }] = await Promise.all([
+        supabase
+            .from('organizations')
+            .select('auto_penalty_enabled, late_threshold_minutes, late_penalty_amount, shift_start_time')
+            .eq('id', req.user.organizationId)
+            .single(),
+        supabase.from('users').select('full_name, department_id').eq('id', req.user.id).maybeSingle(),
+    ]);
     if (orgFetchError) console.error('Failed to load organization settings for attendance side-effects:', orgFetchError.message);
+    if (employeeError) console.error('Failed to load employee for attendance side-effects:', employeeError.message);
 
-    if (type === 'check_in' && org) {
+    const schedule = org ? await resolveScheduleForDepartment(employee?.department_id, org.shift_start_time) : null;
+
+    if (type === 'check_in' && org && schedule) {
         try {
-            await maybeCreateLatePenalty(record, req.user.organizationId, org);
+            await maybeCreateLatePenalty(record, req.user.organizationId, org, schedule);
         } catch (err) {
             // Best-effort: a failed penalty check must never block the check-in itself.
             console.error('Auto-penalty check failed:', err.message);
@@ -141,7 +148,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
     }
 
     try {
-        await notifyOwnerOfAttendance(record, req.user, type, org);
+        await notifyOwnerOfAttendance(record, req.user, type, employee, schedule);
     } catch (err) {
         console.error('Failed to notify owner of attendance:', err.message);
     }
@@ -149,10 +156,10 @@ router.post('/', upload.single('photo'), async (req, res) => {
     res.status(201).json({ record });
 });
 
-async function maybeCreateLatePenalty(attendanceRecord, organizationId, org) {
+async function maybeCreateLatePenalty(attendanceRecord, organizationId, org, schedule) {
     if (!org.auto_penalty_enabled) return;
 
-    const { lateMinutes } = computeLateness(new Date(attendanceRecord.created_at), org.shift_start_time);
+    const { lateMinutes } = computeLateness(new Date(attendanceRecord.created_at), schedule);
     const thresholdMinutes = org.late_threshold_minutes;
     if (lateMinutes <= thresholdMinutes) return;
 
@@ -170,9 +177,9 @@ async function maybeCreateLatePenalty(attendanceRecord, organizationId, org) {
 
 // Instant "employee checked in/out" ping to the owner, using the same
 // Telegram-sending infrastructure as the overdue notifier.
-async function notifyOwnerOfAttendance(record, user, type, org) {
+async function notifyOwnerOfAttendance(record, user, type, employee, schedule) {
     const botToken = process.env.BOT_TOKEN;
-    if (!botToken) return;
+    if (!botToken || !employee) return;
 
     const { data: owner, error: ownerError } = await supabase
         .from('users')
@@ -182,13 +189,6 @@ async function notifyOwnerOfAttendance(record, user, type, org) {
         .maybeSingle();
     if (ownerError || !owner?.telegram_id) return;
 
-    const { data: employee, error: employeeError } = await supabase
-        .from('users')
-        .select('full_name')
-        .eq('id', user.id)
-        .maybeSingle();
-    if (employeeError || !employee) return;
-
     const time = new Date(record.created_at).toLocaleTimeString('ru-RU', {
         hour: '2-digit',
         minute: '2-digit',
@@ -197,9 +197,9 @@ async function notifyOwnerOfAttendance(record, user, type, org) {
 
     let text;
     if (type === 'check_in') {
-        const lateSuffix = org
+        const lateSuffix = schedule
             ? (() => {
-                  const { isLate, lateMinutes } = computeLateness(new Date(record.created_at), org.shift_start_time);
+                  const { isLate, lateMinutes } = computeLateness(new Date(record.created_at), schedule);
                   return isLate ? `опоздание на ${lateMinutes} мин` : 'вовремя';
               })()
             : 'вовремя';

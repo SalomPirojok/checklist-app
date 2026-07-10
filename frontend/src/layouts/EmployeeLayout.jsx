@@ -57,6 +57,9 @@ export default function EmployeeLayout() {
                 <NavLink to="/training" className={tabClass}>
                     Обучение
                 </NavLink>
+                <NavLink to="/schedule" className={tabClass}>
+                    График
+                </NavLink>
             </nav>
 
             <main className="app-main">

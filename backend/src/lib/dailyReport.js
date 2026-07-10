@@ -24,11 +24,25 @@ export async function buildDailyReport(organizationId, day) {
 
     const { data: orgUsers, error: usersError } = await supabase
         .from('users')
-        .select('id, full_name, role, is_active')
+        .select('id, full_name, role, is_active, department_id')
         .eq('organization_id', organizationId);
     if (usersError) throw new Error(usersError.message);
     const orgUserIds = orgUsers.map((u) => u.id);
     const activeStaff = orgUsers.filter((u) => u.is_active && u.role !== 'owner');
+
+    const { data: departmentSchedules, error: scheduleError } = await supabase
+        .from('department_schedules')
+        .select('department_id, start_time, days_of_week')
+        .eq('organization_id', organizationId);
+    if (scheduleError) throw new Error(scheduleError.message);
+    const scheduleByDepartment = new Map(departmentSchedules.map((s) => [s.department_id, s]));
+
+    function scheduleForUser(user) {
+        const deptSchedule = user.department_id ? scheduleByDepartment.get(user.department_id) : null;
+        return deptSchedule
+            ? { startTime: deptSchedule.start_time, daysOfWeek: deptSchedule.days_of_week }
+            : { startTime: org.shift_start_time, daysOfWeek: null };
+    }
 
     const [
         { data: attendanceRecords, error: attendanceError },
@@ -67,7 +81,7 @@ export async function buildDailyReport(organizationId, day) {
         const recs = attendanceByUser.get(u.id) || {};
         let checkIn = null;
         if (recs.check_in) {
-            const { isLate, lateMinutes } = computeLateness(new Date(recs.check_in.created_at), org.shift_start_time);
+            const { isLate, lateMinutes } = computeLateness(new Date(recs.check_in.created_at), scheduleForUser(u));
             checkIn = { time: recs.check_in.created_at, isLate, lateMinutes };
         }
         return {

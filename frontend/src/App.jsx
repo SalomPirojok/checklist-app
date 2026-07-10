@@ -23,6 +23,7 @@ import PenaltySettingsPage from './pages/PenaltySettingsPage';
 import ReportsPage from './pages/ReportsPage';
 import ReportSettingsPage from './pages/ReportSettingsPage';
 import EmployeeProfilePage from './pages/EmployeeProfilePage';
+import SchedulePage from './pages/SchedulePage';
 
 function AppContent() {
     const { status, error, user } = useAuth();
@@ -55,6 +56,7 @@ function AppContent() {
                         <Route path="/penalties/settings" element={<PenaltySettingsPage />} />
                         <Route path="/reports" element={<ReportsPage />} />
                         <Route path="/reports/settings" element={<ReportSettingsPage />} />
+                        <Route path="/schedule" element={<SchedulePage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 ) : (
@@ -64,6 +66,7 @@ function AppContent() {
                         <Route path="/training" element={<TrainingPage />} />
                         <Route path="/training/:id/test/take" element={<TrainingTestTakePage />} />
                         <Route path="/training/:id" element={<TrainingMaterialViewPage />} />
+                        <Route path="/schedule" element={<SchedulePage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 )}

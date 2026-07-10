@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { canActOnRole } from '../lib/roles.js';
 import { computeLateness } from '../lib/lateness.js';
+import { resolveScheduleForDepartment } from '../lib/schedule.js';
 
 const router = Router();
 
@@ -116,8 +117,9 @@ router.get('/:id/profile', async (req, res) => {
         return res.status(500).json({ error: 'Failed to load employee profile data' });
     }
 
+    const schedule = await resolveScheduleForDepartment(employee.department_id, org.shift_start_time);
     const checkIns = attendanceRecords.filter((r) => r.type === 'check_in');
-    const lateCheckIns = checkIns.filter((r) => computeLateness(new Date(r.created_at), org.shift_start_time).isLate);
+    const lateCheckIns = checkIns.filter((r) => computeLateness(new Date(r.created_at), schedule).isLate);
 
     const penaltiesTotal = penaltyRows.reduce((sum, p) => sum + Number(p.amount), 0);
 
