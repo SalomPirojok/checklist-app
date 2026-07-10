@@ -122,8 +122,47 @@ router.post('/', upload.single('photo'), async (req, res) => {
         .single();
     if (insertError) return res.status(500).json({ error: 'Failed to record attendance' });
 
+    if (type === 'check_in') {
+        try {
+            await maybeCreateLatePenalty(record, req.user.organizationId);
+        } catch (err) {
+            // Best-effort: a failed penalty check must never block the check-in itself.
+            console.error('Auto-penalty check failed:', err.message);
+        }
+    }
+
     res.status(201).json({ record });
 });
+
+// Single org-wide shift_start_time for MVP (no per-employee schedules yet).
+async function maybeCreateLatePenalty(attendanceRecord, organizationId) {
+    const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .select('auto_penalty_enabled, late_threshold_minutes, late_penalty_amount, shift_start_time')
+        .eq('id', organizationId)
+        .single();
+    if (orgError || !org?.auto_penalty_enabled) return;
+
+    const checkInAt = new Date(attendanceRecord.created_at);
+    const [shiftHours, shiftMinutes] = org.shift_start_time.split(':').map(Number);
+    const expectedStart = new Date(
+        Date.UTC(checkInAt.getUTCFullYear(), checkInAt.getUTCMonth(), checkInAt.getUTCDate(), shiftHours, shiftMinutes)
+    );
+    const thresholdMs = org.late_threshold_minutes * 60 * 1000;
+    if (checkInAt.getTime() <= expectedStart.getTime() + thresholdMs) return;
+
+    const lateMinutes = Math.round((checkInAt.getTime() - expectedStart.getTime()) / 60000);
+    const { error: penaltyError } = await supabase.from('penalties').insert({
+        user_id: attendanceRecord.user_id,
+        organization_id: organizationId,
+        reason: `Опоздание на ${lateMinutes} мин.`,
+        amount: org.late_penalty_amount,
+        rule_type: 'auto_late',
+        related_attendance_id: attendanceRecord.id,
+        created_by: null,
+    });
+    if (penaltyError) throw new Error(penaltyError.message);
+}
 
 router.get('/organization/today', requireRole('owner', 'manager'), async (req, res) => {
     const { data: orgUsers, error: usersError } = await supabase

@@ -8,6 +8,7 @@ import dashboardRouter from './routes/dashboard.js';
 import attendanceRouter from './routes/attendance.js';
 import trainingRouter from './routes/training.js';
 import departmentsRouter from './routes/departments.js';
+import penaltiesRouter from './routes/penalties.js';
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/training', trainingRouter);
 app.use('/api/departments', departmentsRouter);
+app.use('/api/penalties', penaltiesRouter);
 
 // Catches multer errors (oversized/unsupported file, etc.) and anything else
 // passed to next(err) so clients always get JSON instead of Express's HTML page.

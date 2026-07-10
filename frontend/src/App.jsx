@@ -18,6 +18,8 @@ import TrainingTestEditorPage from './pages/TrainingTestEditorPage';
 import TrainingTestTakePage from './pages/TrainingTestTakePage';
 import TrainingResultsPage from './pages/TrainingResultsPage';
 import DepartmentsPage from './pages/DepartmentsPage';
+import PenaltiesPage from './pages/PenaltiesPage';
+import PenaltySettingsPage from './pages/PenaltySettingsPage';
 
 function AppContent() {
     const { status, error, user } = useAuth();
@@ -45,6 +47,8 @@ function AppContent() {
                         <Route path="/training/:id/edit" element={<TrainingMaterialEditorPage />} />
                         <Route path="/training/:id/test/edit" element={<TrainingTestEditorPage />} />
                         <Route path="/training/:id" element={<TrainingMaterialViewPage />} />
+                        <Route path="/penalties" element={<PenaltiesPage />} />
+                        <Route path="/penalties/settings" element={<PenaltySettingsPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 ) : (
