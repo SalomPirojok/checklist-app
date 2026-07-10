@@ -131,7 +131,7 @@ export function formatDailyReportMessage(report) {
 
     if (report.penalties.length > 0) {
         lines.push('', 'Штрафы:');
-        for (const p of report.penalties) lines.push(`• ${p.full_name} — ${p.reason} (${Number(p.amount).toLocaleString('ru-RU')} ₽)`);
+        for (const p of report.penalties) lines.push(`• ${p.full_name} — ${p.reason} (${Number(p.amount).toLocaleString('ru-RU')} сум)`);
     }
 
     return lines.join('\n');

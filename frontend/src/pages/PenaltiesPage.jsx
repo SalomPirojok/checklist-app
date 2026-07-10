@@ -107,7 +107,7 @@ export default function PenaltiesPage() {
                                     {p.created_by_user && ` · добавил: ${p.created_by_user.full_name}`}
                                 </div>
                             </div>
-                            <div className="list-row__title">{Number(p.amount).toLocaleString('ru-RU')} ₽</div>
+                            <div className="list-row__title">{Number(p.amount).toLocaleString('ru-RU')} сум</div>
                         </li>
                     ))}
                 </ul>

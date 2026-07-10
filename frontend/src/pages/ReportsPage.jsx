@@ -171,7 +171,7 @@ export default function ReportsPage() {
                                                     <div className="list-row__title">{p.full_name}</div>
                                                     <div className="hint">{p.reason}</div>
                                                 </div>
-                                                <div className="list-row__title">{Number(p.amount).toLocaleString('ru-RU')} ₽</div>
+                                                <div className="list-row__title">{Number(p.amount).toLocaleString('ru-RU')} сум</div>
                                             </li>
                                         ))}
                                     </ul>
