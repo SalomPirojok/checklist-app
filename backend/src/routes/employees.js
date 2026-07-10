@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { canActOnRole } from '../lib/roles.js';
+import { computeLateness } from '../lib/lateness.js';
 
 const router = Router();
 
@@ -32,6 +33,151 @@ router.get('/:id', async (req, res) => {
     if (error) return res.status(500).json({ error: 'Failed to fetch employee' });
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
     res.json({ employee });
+});
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// Aggregates attendance, checklist completion, penalties, and training
+// results for one employee over a period -- reuses the same underlying
+// tables as the Reports screen, just scoped to a single user instead of
+// the whole org.
+router.get('/:id/profile', async (req, res) => {
+    const { data: employee, error: employeeError } = await supabase
+        .from('users')
+        .select('*, department:departments(id, name)')
+        .eq('id', req.params.id)
+        .eq('organization_id', req.user.organizationId)
+        .maybeSingle();
+    if (employeeError) return res.status(500).json({ error: 'Failed to fetch employee' });
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+
+    const { from, to } = req.query;
+    let periodStart;
+    let periodEnd;
+    if (from || to) {
+        if (!from || !to || !DATE_PATTERN.test(from) || !DATE_PATTERN.test(to)) {
+            return res.status(400).json({ error: 'from and to must both be provided in YYYY-MM-DD format' });
+        }
+        periodStart = new Date(`${from}T00:00:00Z`);
+        periodEnd = new Date(`${to}T00:00:00Z`);
+        periodEnd.setUTCDate(periodEnd.getUTCDate() + 1);
+        if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart >= periodEnd) {
+            return res.status(400).json({ error: 'from must be a valid date before to' });
+        }
+    } else {
+        periodEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        periodStart = new Date('2000-01-01T00:00:00Z');
+    }
+    const periodStartIso = periodStart.toISOString();
+    const periodEndIso = periodEnd.toISOString();
+
+    const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .select('shift_start_time')
+        .eq('id', req.user.organizationId)
+        .single();
+    if (orgError) return res.status(500).json({ error: 'Failed to load organization settings' });
+
+    const [
+        { data: attendanceRecords, error: attendanceError },
+        { data: assignments, error: assignmentsError },
+        { data: penaltyRows, error: penaltiesError },
+        { data: attemptRows, error: attemptsError },
+    ] = await Promise.all([
+        supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('user_id', employee.id)
+            .gte('created_at', periodStartIso)
+            .lt('created_at', periodEndIso)
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('checklist_assignments')
+            .select('id, status')
+            .eq('assigned_to', employee.id)
+            .eq('is_standing', false)
+            .gte('created_at', periodStartIso)
+            .lt('created_at', periodEndIso),
+        supabase
+            .from('penalties')
+            .select('*')
+            .eq('user_id', employee.id)
+            .gte('created_at', periodStartIso)
+            .lt('created_at', periodEndIso)
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('training_test_attempts')
+            .select('test_id, score_percent, passed, created_at')
+            .eq('user_id', employee.id)
+            .gte('created_at', periodStartIso)
+            .lt('created_at', periodEndIso),
+    ]);
+    if (attendanceError || assignmentsError || penaltiesError || attemptsError) {
+        return res.status(500).json({ error: 'Failed to load employee profile data' });
+    }
+
+    const checkIns = attendanceRecords.filter((r) => r.type === 'check_in');
+    const lateCheckIns = checkIns.filter((r) => computeLateness(new Date(r.created_at), org.shift_start_time).isLate);
+
+    const penaltiesTotal = penaltyRows.reduce((sum, p) => sum + Number(p.amount), 0);
+
+    let training = [];
+    if (attemptRows.length > 0) {
+        const testIds = [...new Set(attemptRows.map((a) => a.test_id))];
+        const { data: tests, error: testsError } = await supabase
+            .from('training_tests')
+            .select('id, material_id')
+            .in('id', testIds);
+        if (testsError) return res.status(500).json({ error: 'Failed to load training tests' });
+
+        const materialIds = [...new Set(tests.map((t) => t.material_id))];
+        const { data: materials, error: materialsError } = await supabase
+            .from('training_materials')
+            .select('id, title')
+            .in('id', materialIds);
+        if (materialsError) return res.status(500).json({ error: 'Failed to load training materials' });
+
+        const materialMap = new Map(materials.map((m) => [m.id, m]));
+        const testMap = new Map(tests.map((t) => [t.id, t]));
+
+        training = testIds.map((testId) => {
+            const attempts = attemptRows.filter((a) => a.test_id === testId);
+            const material = materialMap.get(testMap.get(testId)?.material_id);
+            const bestScore = Math.max(...attempts.map((a) => a.score_percent));
+            return {
+                test_id: testId,
+                material_title: material?.title || '—',
+                attempt_count: attempts.length,
+                best_score_percent: bestScore,
+                passed: attempts.some((a) => a.passed),
+                last_attempt_at: attempts.reduce((latest, a) => (a.created_at > latest ? a.created_at : latest), attempts[0].created_at),
+            };
+        });
+    }
+
+    res.json({
+        employee: {
+            id: employee.id,
+            full_name: employee.full_name,
+            role: employee.role,
+            department: employee.department,
+        },
+        period: from && to ? { from, to } : { from: null, to: null },
+        attendance: {
+            check_ins: checkIns.length,
+            late_check_ins: lateCheckIns.length,
+        },
+        checklists: {
+            total: assignments.length,
+            completed: assignments.filter((a) => a.status === 'completed').length,
+            overdue: assignments.filter((a) => a.status === 'overdue').length,
+        },
+        penalties: {
+            items: penaltyRows,
+            total_amount: penaltiesTotal,
+        },
+        training,
+    });
 });
 
 router.post('/', async (req, res) => {

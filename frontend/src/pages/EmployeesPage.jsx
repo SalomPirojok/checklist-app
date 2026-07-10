@@ -176,7 +176,14 @@ export default function EmployeesPage() {
                             <li key={employee.id} className="list-row">
                                 <div>
                                     <div className="list-row__title">
-                                        {employee.full_name}
+                                        <button
+                                            type="button"
+                                            className="clickable-photo"
+                                            style={{ fontWeight: 500, textDecoration: 'underline' }}
+                                            onClick={() => navigate(`/employees/${employee.id}`)}
+                                        >
+                                            {employee.full_name}
+                                        </button>
                                         {!employee.is_active && <span className="tag">неактивен</span>}
                                         {!employee.telegram_id && <span className="tag tag--pending">не подключён</span>}
                                     </div>

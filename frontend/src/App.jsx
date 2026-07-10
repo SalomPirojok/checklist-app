@@ -22,6 +22,7 @@ import PenaltiesPage from './pages/PenaltiesPage';
 import PenaltySettingsPage from './pages/PenaltySettingsPage';
 import ReportsPage from './pages/ReportsPage';
 import ReportSettingsPage from './pages/ReportSettingsPage';
+import EmployeeProfilePage from './pages/EmployeeProfilePage';
 
 function AppContent() {
     const { status, error, user } = useAuth();
@@ -38,6 +39,7 @@ function AppContent() {
                     <Route element={<AppLayout />}>
                         <Route path="/" element={<DashboardPage />} />
                         <Route path="/employees" element={<EmployeesPage />} />
+                        <Route path="/employees/:id" element={<EmployeeProfilePage />} />
                         <Route path="/departments" element={<DepartmentsPage />} />
                         <Route path="/templates" element={<TemplatesPage />} />
                         <Route path="/templates/new" element={<TemplateEditorPage />} />
