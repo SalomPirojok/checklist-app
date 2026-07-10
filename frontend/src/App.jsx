@@ -24,6 +24,7 @@ import ReportsPage from './pages/ReportsPage';
 import ReportSettingsPage from './pages/ReportSettingsPage';
 import EmployeeProfilePage from './pages/EmployeeProfilePage';
 import SchedulePage from './pages/SchedulePage';
+import ShiftSchedulePage from './pages/ShiftSchedulePage';
 
 function AppContent() {
     const { status, error, user } = useAuth();
@@ -57,6 +58,7 @@ function AppContent() {
                         <Route path="/reports" element={<ReportsPage />} />
                         <Route path="/reports/settings" element={<ReportSettingsPage />} />
                         <Route path="/schedule" element={<SchedulePage />} />
+                        <Route path="/shift-schedule" element={<ShiftSchedulePage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 ) : (

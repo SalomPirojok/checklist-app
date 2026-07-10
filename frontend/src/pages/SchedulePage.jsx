@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import { useAuth } from '../context/AuthContext';
 
@@ -110,6 +111,7 @@ function ScheduleEditor({ departmentId, initial, onSaved, onCancel, api }) {
 
 export default function SchedulePage() {
     const api = useApiClient();
+    const navigate = useNavigate();
     const { user } = useAuth();
     const canManage = user.role === 'owner' || user.role === 'manager';
 
@@ -142,6 +144,11 @@ export default function SchedulePage() {
         <div className="page">
             <div className="page-header">
                 <h1>График работы</h1>
+                {canManage && (
+                    <button type="button" className="btn btn--ghost" onClick={() => navigate('/shift-schedule')}>
+                        Конструктор смен
+                    </button>
+                )}
             </div>
 
             {loading && <p>Загрузка...</p>}
