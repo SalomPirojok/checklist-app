@@ -34,6 +34,9 @@ export default function AppLayout() {
                 <NavLink to="/penalties" className={tabClass}>
                     Штрафы
                 </NavLink>
+                <NavLink to="/reports" className={tabClass}>
+                    Отчёты
+                </NavLink>
             </nav>
 
             <main className="app-main">

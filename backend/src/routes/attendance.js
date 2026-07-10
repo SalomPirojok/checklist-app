@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { uploadAttendancePhoto, verifyAttendancePhotoBelongsToUser } from '../lib/storage.js';
+import { computeLateness } from '../lib/lateness.js';
+import { sendTelegramMessage } from '../lib/telegramNotify.js';
 
 const router = Router();
 
@@ -122,36 +124,38 @@ router.post('/', upload.single('photo'), async (req, res) => {
         .single();
     if (insertError) return res.status(500).json({ error: 'Failed to record attendance' });
 
-    if (type === 'check_in') {
+    const { data: org, error: orgFetchError } = await supabase
+        .from('organizations')
+        .select('auto_penalty_enabled, late_threshold_minutes, late_penalty_amount, shift_start_time')
+        .eq('id', req.user.organizationId)
+        .single();
+    if (orgFetchError) console.error('Failed to load organization settings for attendance side-effects:', orgFetchError.message);
+
+    if (type === 'check_in' && org) {
         try {
-            await maybeCreateLatePenalty(record, req.user.organizationId);
+            await maybeCreateLatePenalty(record, req.user.organizationId, org);
         } catch (err) {
             // Best-effort: a failed penalty check must never block the check-in itself.
             console.error('Auto-penalty check failed:', err.message);
         }
     }
 
+    try {
+        await notifyOwnerOfAttendance(record, req.user, type, org);
+    } catch (err) {
+        console.error('Failed to notify owner of attendance:', err.message);
+    }
+
     res.status(201).json({ record });
 });
 
-// Single org-wide shift_start_time for MVP (no per-employee schedules yet).
-async function maybeCreateLatePenalty(attendanceRecord, organizationId) {
-    const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .select('auto_penalty_enabled, late_threshold_minutes, late_penalty_amount, shift_start_time')
-        .eq('id', organizationId)
-        .single();
-    if (orgError || !org?.auto_penalty_enabled) return;
+async function maybeCreateLatePenalty(attendanceRecord, organizationId, org) {
+    if (!org.auto_penalty_enabled) return;
 
-    const checkInAt = new Date(attendanceRecord.created_at);
-    const [shiftHours, shiftMinutes] = org.shift_start_time.split(':').map(Number);
-    const expectedStart = new Date(
-        Date.UTC(checkInAt.getUTCFullYear(), checkInAt.getUTCMonth(), checkInAt.getUTCDate(), shiftHours, shiftMinutes)
-    );
-    const thresholdMs = org.late_threshold_minutes * 60 * 1000;
-    if (checkInAt.getTime() <= expectedStart.getTime() + thresholdMs) return;
+    const { lateMinutes } = computeLateness(new Date(attendanceRecord.created_at), org.shift_start_time);
+    const thresholdMinutes = org.late_threshold_minutes;
+    if (lateMinutes <= thresholdMinutes) return;
 
-    const lateMinutes = Math.round((checkInAt.getTime() - expectedStart.getTime()) / 60000);
     const { error: penaltyError } = await supabase.from('penalties').insert({
         user_id: attendanceRecord.user_id,
         organization_id: organizationId,
@@ -162,6 +166,49 @@ async function maybeCreateLatePenalty(attendanceRecord, organizationId) {
         created_by: null,
     });
     if (penaltyError) throw new Error(penaltyError.message);
+}
+
+// Instant "employee checked in/out" ping to the owner, using the same
+// Telegram-sending infrastructure as the overdue notifier.
+async function notifyOwnerOfAttendance(record, user, type, org) {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) return;
+
+    const { data: owner, error: ownerError } = await supabase
+        .from('users')
+        .select('telegram_id')
+        .eq('organization_id', user.organizationId)
+        .eq('role', 'owner')
+        .maybeSingle();
+    if (ownerError || !owner?.telegram_id) return;
+
+    const { data: employee, error: employeeError } = await supabase
+        .from('users')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+    if (employeeError || !employee) return;
+
+    const time = new Date(record.created_at).toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'UTC',
+    });
+
+    let text;
+    if (type === 'check_in') {
+        const lateSuffix = org
+            ? (() => {
+                  const { isLate, lateMinutes } = computeLateness(new Date(record.created_at), org.shift_start_time);
+                  return isLate ? `опоздание на ${lateMinutes} мин` : 'вовремя';
+              })()
+            : 'вовремя';
+        text = `✅ ${employee.full_name} отметил приход в ${time} (${lateSuffix})`;
+    } else {
+        text = `🏁 ${employee.full_name} отметил уход в ${time}`;
+    }
+
+    await sendTelegramMessage(botToken, owner.telegram_id, text);
 }
 
 router.get('/organization/today', requireRole('owner', 'manager'), async (req, res) => {
