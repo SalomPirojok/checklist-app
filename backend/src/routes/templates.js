@@ -63,6 +63,25 @@ function validateAutoAssignFields({ auto_assign_time, due_offset_minutes, auto_a
     return null;
 }
 
+// Empty array is normalized to null so "no sub-checkboxes" has one
+// representation and every existing item keeps behaving exactly as before.
+function validateSubCheckboxes(subCheckboxes) {
+    if (subCheckboxes === undefined || subCheckboxes === null) return null;
+    if (!Array.isArray(subCheckboxes)) return 'sub_checkboxes must be an array';
+    if (subCheckboxes.some((sc) => !sc || typeof sc.id !== 'string' || !sc.id || typeof sc.label !== 'string' || !sc.label.trim())) {
+        return 'every sub_checkbox requires a non-empty id and label';
+    }
+    const ids = subCheckboxes.map((sc) => sc.id);
+    if (new Set(ids).size !== ids.length) return 'sub_checkbox ids must be unique within an item';
+    return null;
+}
+
+function normalizeSubCheckboxes(subCheckboxes) {
+    return Array.isArray(subCheckboxes) && subCheckboxes.length > 0
+        ? subCheckboxes.map((sc) => ({ id: sc.id, label: sc.label.trim() }))
+        : null;
+}
+
 function normalizeItems(items, templateId) {
     return items.map((item, index) => ({
         template_id: templateId,
@@ -71,6 +90,7 @@ function normalizeItems(items, templateId) {
         requires_photo: !!item.requires_photo,
         category: item.category || null,
         order_index: item.order_index ?? index,
+        sub_checkboxes: normalizeSubCheckboxes(item.sub_checkboxes),
     }));
 }
 
@@ -130,6 +150,10 @@ router.post('/', async (req, res) => {
     }
     if (items.some((item) => !item.title)) {
         return res.status(400).json({ error: 'every item requires a title' });
+    }
+    for (const item of items) {
+        const subError = validateSubCheckboxes(item.sub_checkboxes);
+        if (subError) return res.status(400).json({ error: subError });
     }
     const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes, auto_assign_days_of_week });
     if (autoAssignError) return res.status(400).json({ error: autoAssignError });
@@ -256,8 +280,10 @@ router.post('/:id/items', async (req, res) => {
     }
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const { title, description, requires_photo, category, order_index } = req.body || {};
+    const { title, description, requires_photo, category, order_index, sub_checkboxes } = req.body || {};
     if (!title) return res.status(400).json({ error: 'title is required' });
+    const subError = validateSubCheckboxes(sub_checkboxes);
+    if (subError) return res.status(400).json({ error: subError });
 
     let nextOrderIndex = order_index;
     if (nextOrderIndex === undefined) {
@@ -280,6 +306,7 @@ router.post('/:id/items', async (req, res) => {
             requires_photo: !!requires_photo,
             category: category || null,
             order_index: nextOrderIndex,
+            sub_checkboxes: normalizeSubCheckboxes(sub_checkboxes),
         })
         .select()
         .single();
@@ -301,6 +328,10 @@ router.put('/:id/items', async (req, res) => {
     const { items } = req.body || {};
     if (!Array.isArray(items) || items.some((item) => !item.title)) {
         return res.status(400).json({ error: 'items must be an array and every item requires a title' });
+    }
+    for (const item of items) {
+        const subError = validateSubCheckboxes(item.sub_checkboxes);
+        if (subError) return res.status(400).json({ error: subError });
     }
 
     const { error: deleteError } = await supabase
@@ -331,13 +362,17 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     }
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const { title, description, requires_photo, category, order_index } = req.body || {};
+    const { title, description, requires_photo, category, order_index, sub_checkboxes } = req.body || {};
+    const subError = validateSubCheckboxes(sub_checkboxes);
+    if (subError) return res.status(400).json({ error: subError });
+
     const updates = {};
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description;
     if (requires_photo !== undefined) updates.requires_photo = !!requires_photo;
     if (category !== undefined) updates.category = category || null;
     if (order_index !== undefined) updates.order_index = order_index;
+    if (sub_checkboxes !== undefined) updates.sub_checkboxes = normalizeSubCheckboxes(sub_checkboxes);
 
     if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: 'No valid fields to update' });

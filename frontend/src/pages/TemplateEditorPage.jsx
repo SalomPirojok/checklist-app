@@ -3,7 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import { buildDisplaySegments } from '../utils/groupByCategory';
 
-const emptyItem = () => ({ title: '', description: '', requires_photo: false, category: '' });
+const emptyItem = () => ({ title: '', description: '', requires_photo: false, category: '', sub_checkboxes: [] });
+
+function newSubCheckboxId() {
+    return typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `sub-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 const DAYS_OF_WEEK = [
     { value: 1, label: 'Пн' },
@@ -68,6 +74,7 @@ export default function TemplateEditorPage() {
                               description: item.description || '',
                               requires_photo: item.requires_photo,
                               category: item.category || '',
+                              sub_checkboxes: item.sub_checkboxes || [],
                           }))
                         : [emptyItem()]
                 );
@@ -91,6 +98,34 @@ export default function TemplateEditorPage() {
         setItems((prev) => prev.filter((_, i) => i !== index));
     }
 
+    function addSubCheckbox(itemIndex) {
+        setItems((prev) =>
+            prev.map((item, i) =>
+                i === itemIndex
+                    ? { ...item, sub_checkboxes: [...(item.sub_checkboxes || []), { id: newSubCheckboxId(), label: '' }] }
+                    : item
+            )
+        );
+    }
+
+    function updateSubCheckboxLabel(itemIndex, subIndex, label) {
+        setItems((prev) =>
+            prev.map((item, i) =>
+                i === itemIndex
+                    ? { ...item, sub_checkboxes: item.sub_checkboxes.map((sc, j) => (j === subIndex ? { ...sc, label } : sc)) }
+                    : item
+            )
+        );
+    }
+
+    function removeSubCheckbox(itemIndex, subIndex) {
+        setItems((prev) =>
+            prev.map((item, i) =>
+                i === itemIndex ? { ...item, sub_checkboxes: item.sub_checkboxes.filter((_, j) => j !== subIndex) } : item
+            )
+        );
+    }
+
     function toggleDay(day) {
         setDaysOfWeek((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
     }
@@ -101,7 +136,12 @@ export default function TemplateEditorPage() {
 
         const cleanItems = items
             .filter((item) => item.title.trim())
-            .map((item, index) => ({ ...item, category: item.category.trim() || null, order_index: index }));
+            .map((item, index) => ({
+                ...item,
+                category: item.category.trim() || null,
+                order_index: index,
+                sub_checkboxes: (item.sub_checkboxes || []).filter((sc) => sc.label.trim()).map((sc) => ({ id: sc.id, label: sc.label.trim() })),
+            }));
 
         if (cleanItems.length === 0) {
             setError('Добавьте хотя бы один пункт с названием.');
@@ -162,6 +202,7 @@ export default function TemplateEditorPage() {
 
     function renderItemRow(item) {
         const index = item.__index;
+        const subCheckboxes = item.sub_checkboxes || [];
         return (
             <div className="item-row" key={index}>
                 <input
@@ -185,6 +226,33 @@ export default function TemplateEditorPage() {
                     />
                     <span>Фото обязательно</span>
                 </label>
+
+                {subCheckboxes.length > 0 && (
+                    <div className="sub-checkbox-editor">
+                        {subCheckboxes.map((sc, subIndex) => (
+                            <div key={sc.id} style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                <input
+                                    type="text"
+                                    placeholder="Текст подпункта"
+                                    value={sc.label}
+                                    onChange={(e) => updateSubCheckboxLabel(index, subIndex, e.target.value)}
+                                    style={{ flex: 1 }}
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn--ghost btn--danger"
+                                    onClick={() => removeSubCheckbox(index, subIndex)}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <button type="button" className="btn btn--ghost" onClick={() => addSubCheckbox(index)}>
+                    + Добавить подпункт
+                </button>
+
                 <button type="button" className="btn btn--ghost btn--danger" onClick={() => removeItem(index)}>
                     Удалить
                 </button>

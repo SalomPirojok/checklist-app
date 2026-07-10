@@ -13,6 +13,19 @@ function ItemRow({ item }) {
                 <div className="checklist-item__body">
                     <div className="checklist-item__title">{item.template_item.title}</div>
                     {item.template_item.description && <div className="hint">{item.template_item.description}</div>}
+                    {Array.isArray(item.template_item.sub_checkboxes) && item.template_item.sub_checkboxes.length > 0 && (
+                        <ul className="sub-checkbox-list">
+                            {item.template_item.sub_checkboxes.map((sc) => {
+                                const result = (item.sub_checkbox_results || []).find((r) => r.id === sc.id);
+                                const checked = !!result?.checked;
+                                return (
+                                    <li key={sc.id} className="hint">
+                                        {checked ? '✓' : '○'} {sc.label}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
                     {item.is_done && item.done_at && (
                         <div className="hint">Выполнено: {new Date(item.done_at).toLocaleString('ru-RU')}</div>
                     )}

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { buildInitialSubCheckboxResults } from '../lib/subCheckboxes.js';
 
 function startOfDayUTC(date) {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString();
@@ -56,7 +57,7 @@ export async function runAutoAssignChecklists() {
 
             const { data: templateItems, error: itemsError } = await supabase
                 .from('checklist_template_items')
-                .select('id')
+                .select('id, sub_checkboxes')
                 .eq('template_id', template.id);
             if (itemsError) throw new Error(itemsError.message);
             if (!templateItems.length) continue; // nothing to hand out
@@ -109,7 +110,13 @@ export async function runAutoAssignChecklists() {
 
                 const { error: assignmentItemsError } = await supabase
                     .from('checklist_assignment_items')
-                    .insert(templateItems.map((item) => ({ assignment_id: assignment.id, template_item_id: item.id })));
+                    .insert(
+                        templateItems.map((item) => ({
+                            assignment_id: assignment.id,
+                            template_item_id: item.id,
+                            sub_checkbox_results: buildInitialSubCheckboxResults(item.sub_checkboxes),
+                        }))
+                    );
                 if (assignmentItemsError) {
                     console.error(`Auto-assign items failed for assignment ${assignment.id}:`, assignmentItemsError.message);
                     await supabase.from('checklist_assignments').delete().eq('id', assignment.id);

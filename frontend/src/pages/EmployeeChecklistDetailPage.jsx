@@ -71,6 +71,19 @@ export default function EmployeeChecklistDetailPage() {
         applyUpdate(item.id, res.item, res.assignment);
     }
 
+    async function handleToggleSubCheckbox(item, subId, checked) {
+        const updatedResults = (item.sub_checkbox_results || []).map((r) => (r.id === subId ? { ...r, checked } : r));
+        try {
+            const res = await api(`/api/assignments/${id}/items/${item.id}`, {
+                method: 'PATCH',
+                body: { sub_checkbox_results: updatedResults },
+            });
+            applyUpdate(item.id, res.item, res.assignment);
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
     async function handleSaveComment(item, comment) {
         try {
             const res = await api(`/api/assignments/${id}/items/${item.id}`, {
@@ -127,6 +140,7 @@ export default function EmployeeChecklistDetailPage() {
             onToggleDone={handleToggleDone}
             onUploadPhoto={handleUploadPhoto}
             onSaveComment={handleSaveComment}
+            onToggleSubCheckbox={handleToggleSubCheckbox}
         />
     );
 

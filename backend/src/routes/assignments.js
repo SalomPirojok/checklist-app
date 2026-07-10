@@ -8,6 +8,7 @@ import {
     uploadSignaturePhoto,
     verifySignatureBelongsToAssignment,
 } from '../lib/storage.js';
+import { buildInitialSubCheckboxResults, allSubCheckboxesChecked } from '../lib/subCheckboxes.js';
 
 const router = Router();
 
@@ -191,7 +192,7 @@ router.post('/', async (req, res) => {
 
     const { data: templateItems, error: itemsError } = await supabase
         .from('checklist_template_items')
-        .select('id')
+        .select('id, sub_checkboxes')
         .eq('template_id', template_id);
     if (itemsError) return res.status(500).json({ error: 'Failed to load template items' });
     if (templateItems.length === 0) {
@@ -214,7 +215,13 @@ router.post('/', async (req, res) => {
 
     const { data: assignmentItems, error: assignmentItemsError } = await supabase
         .from('checklist_assignment_items')
-        .insert(templateItems.map((item) => ({ assignment_id: assignment.id, template_item_id: item.id })))
+        .insert(
+            templateItems.map((item) => ({
+                assignment_id: assignment.id,
+                template_item_id: item.id,
+                sub_checkbox_results: buildInitialSubCheckboxResults(item.sub_checkboxes),
+            }))
+        )
         .select();
 
     if (assignmentItemsError) {
@@ -242,7 +249,7 @@ router.get('/:id', async (req, res) => {
 
     const { data: items, error: itemsError } = await supabase
         .from('checklist_assignment_items')
-        .select('*, template_item:checklist_template_items(title, description, requires_photo, category, order_index)')
+        .select('*, template_item:checklist_template_items(title, description, requires_photo, category, order_index, sub_checkboxes)')
         .eq('assignment_id', assignment.id);
     if (itemsError) return res.status(500).json({ error: 'Failed to fetch assignment items' });
 
@@ -406,14 +413,33 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     if (itemError) return res.status(500).json({ error: 'Failed to fetch item' });
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
-    const { is_done, photo_url, comment } = req.body || {};
+    const { is_done, photo_url, comment, sub_checkbox_results } = req.body || {};
     const updates = {};
     if (comment !== undefined) updates.comment = comment;
     if (photo_url !== undefined) updates.photo_url = photo_url;
 
+    if (sub_checkbox_results !== undefined) {
+        if (!Array.isArray(item.sub_checkbox_results)) {
+            return res.status(400).json({ error: 'This item has no sub-checkboxes' });
+        }
+        const existingIds = new Set(item.sub_checkbox_results.map((r) => r.id));
+        const validShape =
+            Array.isArray(sub_checkbox_results) &&
+            sub_checkbox_results.length === existingIds.size &&
+            sub_checkbox_results.every((r) => r && typeof r.checked === 'boolean' && existingIds.has(r.id));
+        if (!validShape) {
+            return res.status(400).json({ error: 'sub_checkbox_results must match this item\'s existing sub-checkbox ids' });
+        }
+        updates.sub_checkbox_results = sub_checkbox_results;
+    }
+
     if (is_done !== undefined) {
         const willBeDone = !!is_done;
         const finalPhotoUrl = photo_url !== undefined ? photo_url : item.photo_url;
+        const finalSubResults = sub_checkbox_results !== undefined ? sub_checkbox_results : item.sub_checkbox_results;
+        if (willBeDone && !allSubCheckboxesChecked(finalSubResults)) {
+            return res.status(400).json({ error: 'All sub-items must be checked before this item can be marked done' });
+        }
         if (willBeDone && item.template_item.requires_photo) {
             if (!finalPhotoUrl) {
                 return res.status(400).json({ error: 'This item requires a photo before it can be marked done' });
@@ -490,6 +516,23 @@ router.post('/:id/reset', async (req, res) => {
         .eq('assignment_id', assignment.id);
     if (itemsError) return res.status(500).json({ error: 'Failed to reset items' });
 
+    // sub_checkbox_results carries per-item ids, so each row needs its own
+    // all-unchecked value rather than one shared blanket update.
+    const { data: itemsWithSubs, error: subsLookupError } = await supabase
+        .from('checklist_assignment_items')
+        .select('id, sub_checkbox_results')
+        .eq('assignment_id', assignment.id)
+        .not('sub_checkbox_results', 'is', null);
+    if (subsLookupError) return res.status(500).json({ error: 'Failed to reset sub-checkboxes' });
+    for (const item of itemsWithSubs) {
+        const resetResults = item.sub_checkbox_results.map((r) => ({ id: r.id, checked: false }));
+        const { error: subResetError } = await supabase
+            .from('checklist_assignment_items')
+            .update({ sub_checkbox_results: resetResults })
+            .eq('id', item.id);
+        if (subResetError) return res.status(500).json({ error: 'Failed to reset sub-checkboxes' });
+    }
+
     const { data: updatedAssignment, error: assignmentUpdateError } = await supabase
         .from('checklist_assignments')
         .update({ status: 'not_started', started_at: null, completed_at: null, signature_url: null })
@@ -500,7 +543,7 @@ router.post('/:id/reset', async (req, res) => {
 
     const { data: items, error: fetchItemsError } = await supabase
         .from('checklist_assignment_items')
-        .select('*, template_item:checklist_template_items(title, description, requires_photo, category, order_index)')
+        .select('*, template_item:checklist_template_items(title, description, requires_photo, category, order_index, sub_checkboxes)')
         .eq('assignment_id', assignment.id);
     if (fetchItemsError) return res.status(500).json({ error: 'Failed to fetch reset items' });
     items.sort((a, b) => (a.template_item?.order_index ?? 0) - (b.template_item?.order_index ?? 0));

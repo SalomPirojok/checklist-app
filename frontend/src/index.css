@@ -507,6 +507,21 @@ body {
     font-weight: 500;
 }
 
+.sub-checkbox-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sub-checkbox-editor {
+    display: flex;
+    flex-direction: column;
+    margin-top: 4px;
+}
+
 .checklist-item--done .checklist-item__title {
     text-decoration: line-through;
     color: var(--tg-theme-hint-color, #8e8e93);
