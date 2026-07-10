@@ -8,6 +8,7 @@ export default function AssignChecklistModal({ template, onClose, onAssigned }) 
     const [loadingEmployees, setLoadingEmployees] = useState(true);
     const [assignedTo, setAssignedTo] = useState('');
     const [dueAt, setDueAt] = useState('');
+    const [isStanding, setIsStanding] = useState(!!template.is_standing);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
 
@@ -28,8 +29,8 @@ export default function AssignChecklistModal({ template, onClose, onAssigned }) 
 
     async function handleSubmit(e) {
         e.preventDefault();
-        if (!assignedTo || !dueAt) {
-            setError('Выберите сотрудника и дедлайн');
+        if (!assignedTo || (!isStanding && !dueAt)) {
+            setError(isStanding ? 'Выберите сотрудника' : 'Выберите сотрудника и дедлайн');
             return;
         }
 
@@ -41,7 +42,8 @@ export default function AssignChecklistModal({ template, onClose, onAssigned }) 
                 body: {
                     template_id: template.id,
                     assigned_to: assignedTo,
-                    due_at: new Date(dueAt).toISOString(),
+                    is_standing: isStanding,
+                    ...(isStanding ? {} : { due_at: new Date(dueAt).toISOString() }),
                 },
             });
             onAssigned();
@@ -77,10 +79,17 @@ export default function AssignChecklistModal({ template, onClose, onAssigned }) 
                         )}
                     </label>
 
-                    <label className="field">
-                        <span>Дедлайн</span>
-                        <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} required />
+                    <label className="checkbox-field">
+                        <input type="checkbox" checked={isStanding} onChange={(e) => setIsStanding(e.target.checked)} />
+                        <span>Постоянный чек-лист (без дедлайна, всегда доступен, можно сбрасывать и проходить заново)</span>
                     </label>
+
+                    {!isStanding && (
+                        <label className="field">
+                            <span>Дедлайн</span>
+                            <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} required />
+                        </label>
+                    )}
 
                     {error && <p className="error-text">{error}</p>}
 

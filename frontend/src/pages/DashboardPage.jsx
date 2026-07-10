@@ -133,6 +133,17 @@ export default function DashboardPage() {
                 <div className="alert-banner">Всего просрочено (за все дни): {data.overdue_total}</div>
             )}
 
+            {data.standing_assignments.length > 0 && (
+                <section>
+                    <h2>Постоянные чек-листы</h2>
+                    <ul className="list">
+                        {data.standing_assignments.map((a) => (
+                            <AssignmentRow key={a.id} assignment={a} />
+                        ))}
+                    </ul>
+                </section>
+            )}
+
             <section>
                 <h2>Назначения на сегодня</h2>
                 {data.todays_assignments.length === 0 ? (

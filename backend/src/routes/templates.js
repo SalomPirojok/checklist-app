@@ -119,6 +119,7 @@ router.post('/', async (req, res) => {
         due_offset_minutes,
         auto_assign_days_of_week,
         department_id,
+        is_standing,
     } = req.body || {};
 
     if (!title) {
@@ -146,6 +147,7 @@ router.post('/', async (req, res) => {
     if (due_offset_minutes !== undefined) templateInsert.due_offset_minutes = due_offset_minutes;
     if (auto_assign_days_of_week !== undefined) templateInsert.auto_assign_days_of_week = auto_assign_days_of_week;
     if (department_id !== undefined) templateInsert.department_id = department_id;
+    if (is_standing !== undefined) templateInsert.is_standing = !!is_standing;
 
     const { data: template, error: templateError } = await supabase
         .from('checklist_templates')
@@ -191,6 +193,7 @@ router.patch('/:id', async (req, res) => {
         due_offset_minutes,
         auto_assign_days_of_week,
         department_id,
+        is_standing,
     } = req.body || {};
     const autoAssignError = validateAutoAssignFields({ auto_assign_time, due_offset_minutes, auto_assign_days_of_week });
     if (autoAssignError) return res.status(400).json({ error: autoAssignError });
@@ -205,6 +208,7 @@ router.patch('/:id', async (req, res) => {
     if (auto_assign_time) updates.auto_assign_time = auto_assign_time;
     if (due_offset_minutes !== undefined) updates.due_offset_minutes = due_offset_minutes;
     if (auto_assign_days_of_week !== undefined) updates.auto_assign_days_of_week = auto_assign_days_of_week;
+    if (is_standing !== undefined) updates.is_standing = !!is_standing;
     if (department_id !== undefined) updates.department_id = department_id;
 
     if (Object.keys(updates).length === 0) {

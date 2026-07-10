@@ -86,7 +86,7 @@ async function enrichAssignments(assignmentRows) {
 async function syncOverdueStatuses(assignmentRows) {
     const now = new Date();
     const overdueIds = assignmentRows
-        .filter((a) => (a.status === 'not_started' || a.status === 'in_progress') && a.due_at && new Date(a.due_at) < now)
+        .filter((a) => !a.is_standing && (a.status === 'not_started' || a.status === 'in_progress') && a.due_at && new Date(a.due_at) < now)
         .map((a) => a.id);
 
     if (overdueIds.length === 0) return assignmentRows;
@@ -112,7 +112,7 @@ function computeStatusUpdate(assignment, allItemsDone, hasSignature) {
     if (allItemsDone && hasSignature) {
         updates.status = 'completed';
         updates.completed_at = now.toISOString();
-    } else if (assignment.due_at && new Date(assignment.due_at) < now) {
+    } else if (!assignment.is_standing && assignment.due_at && new Date(assignment.due_at) < now) {
         updates.status = 'overdue';
         if (!assignment.started_at) updates.started_at = now.toISOString();
     } else {
@@ -159,11 +159,12 @@ router.post('/', async (req, res) => {
         return res.status(403).json({ error: 'Only owner or manager can assign checklists' });
     }
 
-    const { template_id, assigned_to, due_at } = req.body || {};
-    if (!template_id || !assigned_to || !due_at) {
-        return res.status(400).json({ error: 'template_id, assigned_to and due_at are required' });
+    const { template_id, assigned_to, due_at, is_standing } = req.body || {};
+    const standing = !!is_standing;
+    if (!template_id || !assigned_to || (!standing && !due_at)) {
+        return res.status(400).json({ error: 'template_id, assigned_to are required (due_at is also required unless is_standing is true)' });
     }
-    if (Number.isNaN(new Date(due_at).getTime())) {
+    if (!standing && Number.isNaN(new Date(due_at).getTime())) {
         return res.status(400).json({ error: 'due_at must be a valid date' });
     }
 
@@ -203,7 +204,8 @@ router.post('/', async (req, res) => {
             template_id,
             assigned_to,
             assigned_by: req.user.id,
-            due_at,
+            due_at: standing ? null : due_at,
+            is_standing: standing,
             status: 'not_started',
         })
         .select()
@@ -460,6 +462,51 @@ router.patch('/:id/items/:itemId', async (req, res) => {
 
     const [enrichedAssignment] = await enrichAssignments([updatedAssignment]);
     res.json({ item: updatedItem, assignment: enrichedAssignment });
+});
+
+// Standing checklists get reset in place instead of recreated -- clears every
+// item's completion state plus the assignment's signature/status, but the
+// assignment row itself (and its id/history) stays put.
+router.post('/:id/reset', async (req, res) => {
+    let assignment;
+    try {
+        assignment = await loadAssignmentInOrg(req.params.id, req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to fetch assignment' });
+    }
+    if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
+
+    const isOwnerOrManager = req.user.role === 'owner' || req.user.role === 'manager';
+    if (!isOwnerOrManager && assignment.assigned_to !== req.user.id) {
+        return res.status(403).json({ error: 'Not allowed to reset this assignment' });
+    }
+    if (!assignment.is_standing) {
+        return res.status(400).json({ error: 'Only standing checklists can be reset' });
+    }
+
+    const { error: itemsError } = await supabase
+        .from('checklist_assignment_items')
+        .update({ is_done: false, photo_url: null, comment: null, done_at: null })
+        .eq('assignment_id', assignment.id);
+    if (itemsError) return res.status(500).json({ error: 'Failed to reset items' });
+
+    const { data: updatedAssignment, error: assignmentUpdateError } = await supabase
+        .from('checklist_assignments')
+        .update({ status: 'not_started', started_at: null, completed_at: null, signature_url: null })
+        .eq('id', assignment.id)
+        .select()
+        .single();
+    if (assignmentUpdateError) return res.status(500).json({ error: 'Failed to reset assignment' });
+
+    const { data: items, error: fetchItemsError } = await supabase
+        .from('checklist_assignment_items')
+        .select('*, template_item:checklist_template_items(title, description, requires_photo, category, order_index)')
+        .eq('assignment_id', assignment.id);
+    if (fetchItemsError) return res.status(500).json({ error: 'Failed to fetch reset items' });
+    items.sort((a, b) => (a.template_item?.order_index ?? 0) - (b.template_item?.order_index ?? 0));
+
+    const [enrichedAssignment] = await enrichAssignments([updatedAssignment]);
+    res.json({ assignment: enrichedAssignment, items });
 });
 
 export default router;

@@ -29,6 +29,7 @@ export default function TemplateEditorPage() {
     const [noDeadline, setNoDeadline] = useState(false);
     const [dueOffsetMinutes, setDueOffsetMinutes] = useState(120);
     const [daysOfWeek, setDaysOfWeek] = useState(DAYS_OF_WEEK.map((d) => d.value));
+    const [isStanding, setIsStanding] = useState(false);
     const [departmentId, setDepartmentId] = useState('');
     const [departments, setDepartments] = useState([]);
     const [loading, setLoading] = useState(!isNew);
@@ -59,6 +60,7 @@ export default function TemplateEditorPage() {
                         : DAYS_OF_WEEK.map((d) => d.value)
                 );
                 setDepartmentId(res.template.department_id || '');
+                setIsStanding(!!res.template.is_standing);
                 setItems(
                     res.items.length
                         ? res.items.map((item) => ({
@@ -105,7 +107,7 @@ export default function TemplateEditorPage() {
             setError('Добавьте хотя бы один пункт с названием.');
             return;
         }
-        if (autoAssignEnabled && !noDeadline && (!Number.isInteger(dueOffsetMinutes) || dueOffsetMinutes <= 0)) {
+        if (autoAssignEnabled && !isStanding && !noDeadline && (!Number.isInteger(dueOffsetMinutes) || dueOffsetMinutes <= 0)) {
             setError('Дедлайн (в минутах) должен быть положительным целым числом.');
             return;
         }
@@ -117,9 +119,10 @@ export default function TemplateEditorPage() {
         const autoAssignFields = {
             auto_assign_enabled: autoAssignEnabled,
             auto_assign_time: autoAssignTime,
-            due_offset_minutes: noDeadline ? null : dueOffsetMinutes,
+            due_offset_minutes: isStanding || noDeadline ? null : dueOffsetMinutes,
             auto_assign_days_of_week: daysOfWeek.length === DAYS_OF_WEEK.length ? null : daysOfWeek,
             department_id: departmentId || null,
+            is_standing: isStanding,
         };
 
         setSaving(true);
@@ -254,11 +257,18 @@ export default function TemplateEditorPage() {
                         </label>
 
                         <label className="checkbox-field">
-                            <input type="checkbox" checked={noDeadline} onChange={(e) => setNoDeadline(e.target.checked)} />
-                            <span>Без дедлайна (никогда не становится просроченным)</span>
+                            <input type="checkbox" checked={isStanding} onChange={(e) => setIsStanding(e.target.checked)} />
+                            <span>Постоянный чек-лист (создаётся один раз навсегда, без дедлайна, сотрудник может сбрасывать и проходить заново)</span>
                         </label>
 
-                        {!noDeadline && (
+                        {!isStanding && (
+                            <label className="checkbox-field">
+                                <input type="checkbox" checked={noDeadline} onChange={(e) => setNoDeadline(e.target.checked)} />
+                                <span>Без дедлайна (никогда не становится просроченным)</span>
+                            </label>
+                        )}
+
+                        {!isStanding && !noDeadline && (
                             <label className="field">
                                 <span>Дедлайн через (минут)</span>
                                 <input

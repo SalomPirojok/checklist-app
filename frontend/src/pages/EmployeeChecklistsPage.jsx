@@ -52,14 +52,26 @@ export default function EmployeeChecklistsPage() {
     if (loading) return <p>Загрузка...</p>;
     if (error) return <p className="error-text">{error}</p>;
 
-    const overdue = assignments.filter((a) => a.status === 'overdue');
+    const standing = assignments.filter((a) => a.is_standing);
+    const overdue = assignments.filter((a) => !a.is_standing && a.status === 'overdue');
     // A no-deadline checklist has due_at null -- fall back to created_at so it
     // still shows up on the day it was assigned.
-    const today = assignments.filter((a) => a.status !== 'overdue' && isToday(a.due_at || a.created_at));
+    const today = assignments.filter((a) => !a.is_standing && a.status !== 'overdue' && isToday(a.due_at || a.created_at));
 
     return (
         <div className="page">
             <h1>Мои чек-листы</h1>
+
+            {standing.length > 0 && (
+                <section>
+                    <h2>Постоянные</h2>
+                    <ul className="list">
+                        {standing.map((a) => (
+                            <AssignmentListItem key={a.id} assignment={a} />
+                        ))}
+                    </ul>
+                </section>
+            )}
 
             {overdue.length > 0 && (
                 <section>

@@ -6,6 +6,7 @@ export async function flipOverdueAssignments() {
         .from('checklist_assignments')
         .update({ status: 'overdue' })
         .in('status', ['not_started', 'in_progress'])
+        .eq('is_standing', false)
         .lt('due_at', new Date().toISOString());
 
     if (error) throw new Error(`Failed to flip overdue assignments: ${error.message}`);

@@ -36,12 +36,17 @@ router.get('/today', async (req, res) => {
     const todayStart = startOfDayUTC(now);
     const todayEnd = endOfDayUTC(now);
 
-    const [{ data: todaysAssignments, error: todaysError }, { data: overdueAssignments, error: overdueError }] = await Promise.all([
+    const [
+        { data: todaysAssignments, error: todaysError },
+        { data: overdueAssignments, error: overdueError },
+        { data: standingAssignments, error: standingError },
+    ] = await Promise.all([
         orgUserIds.length
             ? supabase
                   .from('checklist_assignments')
                   .select('*')
                   .in('assigned_to', orgUserIds)
+                  .eq('is_standing', false)
                   // A no-deadline assignment (due_at null) has no due-date range to
                   // match, so it's included instead by checking created_at is today.
                   .or(
@@ -54,13 +59,24 @@ router.get('/today', async (req, res) => {
                   .from('checklist_assignments')
                   .select('*')
                   .in('assigned_to', orgUserIds)
+                  .eq('is_standing', false)
                   .eq('status', 'overdue')
                   .order('due_at', { ascending: true })
             : { data: [], error: null },
+        // Standing checklists are permanent and never overdue, so they're kept
+        // entirely separate from the day's stats -- shown as their own section.
+        orgUserIds.length
+            ? supabase
+                  .from('checklist_assignments')
+                  .select('*')
+                  .in('assigned_to', orgUserIds)
+                  .eq('is_standing', true)
+                  .order('created_at', { ascending: true })
+            : { data: [], error: null },
     ]);
-    if (todaysError || overdueError) return res.status(500).json({ error: 'Failed to load assignments' });
+    if (todaysError || overdueError || standingError) return res.status(500).json({ error: 'Failed to load assignments' });
 
-    const templateIds = [...new Set([...todaysAssignments, ...overdueAssignments].map((a) => a.template_id))];
+    const templateIds = [...new Set([...todaysAssignments, ...overdueAssignments, ...standingAssignments].map((a) => a.template_id))];
     const { data: templates, error: templatesError } = templateIds.length
         ? await supabase.from('checklist_templates').select('id, title').in('id', templateIds)
         : { data: [], error: null };
@@ -84,6 +100,7 @@ router.get('/today', async (req, res) => {
         todays_assignments: todaysAssignments.map(enrich),
         overdue_total: overdueAssignments.length,
         overdue_assignments: overdueAssignments.map(enrich),
+        standing_assignments: standingAssignments.map(enrich),
     });
 });
 

@@ -58,6 +58,18 @@ export default function AssignmentDetailPage() {
         };
     }, [api, id]);
 
+    async function handleReset() {
+        if (!confirm('Сбросить чек-лист сотрудника? Он сможет пройти его заново.')) return;
+        try {
+            const res = await api(`/api/assignments/${id}/reset`, { method: 'POST' });
+            setAssignment(res.assignment);
+            setItems(res.items);
+            setError(null);
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
     if (loading) return <p>Загрузка...</p>;
     if (error) return <p className="error-text">{error}</p>;
     if (!assignment) return null;
@@ -78,10 +90,19 @@ export default function AssignmentDetailPage() {
 
             <p className="hint">Сотрудник: {assignment.assignee?.full_name || '—'}</p>
             {assignment.template?.description && <p className="hint">{assignment.template.description}</p>}
-            <p className="hint">Дедлайн: {assignment.due_at ? new Date(assignment.due_at).toLocaleString('ru-RU') : 'без дедлайна'}</p>
+            {assignment.is_standing ? (
+                <p className="hint">Постоянный чек-лист — без дедлайна, всегда доступен</p>
+            ) : (
+                <p className="hint">Дедлайн: {assignment.due_at ? new Date(assignment.due_at).toLocaleString('ru-RU') : 'без дедлайна'}</p>
+            )}
             <p className="hint">
                 Выполнено: {doneCount} из {items.length}
             </p>
+            {assignment.is_standing && (
+                <button type="button" className="btn btn--ghost" onClick={handleReset}>
+                    Сбросить
+                </button>
+            )}
 
             <ul className="checklist-items">
                 {segments.map((segment, index) =>

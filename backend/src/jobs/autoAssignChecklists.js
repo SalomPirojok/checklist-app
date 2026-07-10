@@ -62,21 +62,26 @@ export async function runAutoAssignChecklists() {
             if (!templateItems.length) continue; // nothing to hand out
 
             const employeeIds = employees.map((e) => e.id);
-            // Keyed off created_at (not due_at) so this works the same whether
-            // or not the template has a deadline -- a no-deadline assignment
-            // has due_at null and would never match a due_at range filter.
-            const { data: existingAssignments, error: existingError } = await supabase
+            // A standing template only ever creates ONE assignment per employee,
+            // ever -- so idempotency looks across all time, not just today.
+            // Everything else is keyed off created_at (not due_at) so this works
+            // the same whether or not the template has a deadline -- a
+            // no-deadline assignment has due_at null and would never match a
+            // due_at range filter.
+            let existingQuery = supabase
                 .from('checklist_assignments')
                 .select('assigned_to')
                 .eq('template_id', template.id)
-                .in('assigned_to', employeeIds)
-                .gte('created_at', todayStart)
-                .lt('created_at', todayEnd);
+                .in('assigned_to', employeeIds);
+            existingQuery = template.is_standing
+                ? existingQuery
+                : existingQuery.gte('created_at', todayStart).lt('created_at', todayEnd);
+            const { data: existingAssignments, error: existingError } = await existingQuery;
             if (existingError) throw new Error(existingError.message);
             const alreadyAssigned = new Set(existingAssignments.map((a) => a.assigned_to));
 
             let dueAt = null;
-            if (template.due_offset_minutes !== null && template.due_offset_minutes !== undefined) {
+            if (!template.is_standing && template.due_offset_minutes !== null && template.due_offset_minutes !== undefined) {
                 const [hours, minutes] = template.auto_assign_time.split(':').map(Number);
                 dueAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes));
                 dueAt.setUTCMinutes(dueAt.getUTCMinutes() + template.due_offset_minutes);
@@ -92,6 +97,7 @@ export async function runAutoAssignChecklists() {
                         assigned_to: employee.id,
                         assigned_by: template.created_by,
                         due_at: dueAt ? dueAt.toISOString() : null,
+                        is_standing: template.is_standing,
                         status: 'not_started',
                     })
                     .select()
