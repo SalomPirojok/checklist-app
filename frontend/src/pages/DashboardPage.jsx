@@ -4,6 +4,7 @@ import { useApiClient } from '../api/useApiClient';
 import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import StatTile from '../components/StatTile';
 import StatusBadge from '../components/StatusBadge';
+import PhotoLightbox from '../components/PhotoLightbox';
 
 const STAT_ORDER = [
     ['not_started', 'Не начато'],
@@ -31,28 +32,28 @@ function formatTime(isoString) {
     return new Date(isoString).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
-function AttendancePhoto({ record }) {
+function AttendancePhoto({ record, onOpenPhoto }) {
     if (!record) return <span className="hint">не отмечен</span>;
     return (
-        <a href={record.photo_url} target="_blank" rel="noopener noreferrer" className="attendance-photo-link">
+        <button type="button" className="clickable-photo attendance-photo-link" onClick={() => onOpenPhoto(record.photo_url)}>
             <img src={record.photo_url} alt="" className="attendance-photo-thumb" />
             <span>{formatTime(record.created_at)}</span>
-        </a>
+        </button>
     );
 }
 
-function AttendanceRow({ entry }) {
+function AttendanceRow({ entry, onOpenPhoto }) {
     return (
         <li className="list-row">
             <div className="list-row__title">{entry.user.full_name}</div>
             <div className="attendance-row__times">
                 <div>
                     <div className="hint">Приход</div>
-                    <AttendancePhoto record={entry.check_in} />
+                    <AttendancePhoto record={entry.check_in} onOpenPhoto={onOpenPhoto} />
                 </div>
                 <div>
                     <div className="hint">Уход</div>
-                    <AttendancePhoto record={entry.check_out} />
+                    <AttendancePhoto record={entry.check_out} onOpenPhoto={onOpenPhoto} />
                 </div>
             </div>
         </li>
@@ -68,6 +69,7 @@ export default function DashboardPage() {
 
     const [attendance, setAttendance] = useState(null);
     const [attendanceError, setAttendanceError] = useState(null);
+    const [lightboxUrl, setLightboxUrl] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -180,11 +182,13 @@ export default function DashboardPage() {
                 {attendance && attendance.attendance.length > 0 && (
                     <ul className="list">
                         {attendance.attendance.map((entry) => (
-                            <AttendanceRow key={entry.user.id} entry={entry} />
+                            <AttendanceRow key={entry.user.id} entry={entry} onOpenPhoto={setLightboxUrl} />
                         ))}
                     </ul>
                 )}
             </section>
+
+            {lightboxUrl && <PhotoLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
         </div>
     );
 }

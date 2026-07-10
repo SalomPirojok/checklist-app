@@ -5,6 +5,7 @@ import StatusBadge from '../components/StatusBadge';
 import ChecklistItem from '../components/ChecklistItem';
 import CategorySection from '../components/CategorySection';
 import SignaturePad from '../components/SignaturePad';
+import PhotoLightbox from '../components/PhotoLightbox';
 import { buildDisplaySegments } from '../utils/groupByCategory';
 
 export default function EmployeeChecklistDetailPage() {
@@ -18,6 +19,7 @@ export default function EmployeeChecklistDetailPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [signatureSaving, setSignatureSaving] = useState(false);
+    const [lightboxUrl, setLightboxUrl] = useState(null);
 
     async function load() {
         try {
@@ -198,15 +200,17 @@ export default function EmployeeChecklistDetailPage() {
             <section className="signature-section">
                 <h2>Подпись</h2>
                 {assignment.signature_url ? (
-                    <a href={assignment.signature_url} target="_blank" rel="noopener noreferrer">
+                    <button type="button" className="clickable-photo" onClick={() => setLightboxUrl(assignment.signature_url)}>
                         <img src={assignment.signature_url} alt="Подпись" className="signature-pad__preview" />
-                    </a>
+                    </button>
                 ) : allItemsDone ? (
                     <SignaturePad onSave={handleSaveSignature} saving={signatureSaving} disabled={readOnly} />
                 ) : (
                     <p className="hint">Сначала выполните все пункты, чтобы поставить подпись.</p>
                 )}
             </section>
+
+            {lightboxUrl && <PhotoLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
         </div>
     );
 }

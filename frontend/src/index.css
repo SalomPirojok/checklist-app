@@ -682,3 +682,48 @@ body {
     flex: 1;
     min-width: 140px;
 }
+
+/* --- photo lightbox --- */
+
+.photo-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.photo-lightbox__image {
+    max-width: 92vw;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.photo-lightbox__close {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.clickable-photo {
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+}

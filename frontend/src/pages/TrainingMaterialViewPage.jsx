@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import { useAuth } from '../context/AuthContext';
+import PhotoLightbox from '../components/PhotoLightbox';
 
 function canManageTrainingClientSide(user) {
     return user.role === 'owner' || (user.role === 'manager' && user.can_manage_training);
@@ -24,6 +25,7 @@ export default function TrainingMaterialViewPage() {
     const [material, setMaterial] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [lightboxOpen, setLightboxOpen] = useState(false);
 
     const [test, setTest] = useState(null);
     const [myAttempts, setMyAttempts] = useState([]);
@@ -87,9 +89,9 @@ export default function TrainingMaterialViewPage() {
             {material.body_text && <p className="training-body">{material.body_text}</p>}
 
             {fileKind === 'image' && (
-                <a href={material.file_url} target="_blank" rel="noopener noreferrer">
+                <button type="button" className="clickable-photo" onClick={() => setLightboxOpen(true)}>
                     <img src={material.file_url} alt="" className="training-file-preview" />
-                </a>
+                </button>
             )}
             {fileKind === 'video' && (
                 <video src={material.file_url} controls className="training-file-preview" />
@@ -150,6 +152,8 @@ export default function TrainingMaterialViewPage() {
                     </button>
                 </div>
             )}
+
+            {lightboxOpen && <PhotoLightbox src={material.file_url} onClose={() => setLightboxOpen(false)} />}
         </div>
     );
 }

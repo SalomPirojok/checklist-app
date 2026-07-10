@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import StatusBadge from '../components/StatusBadge';
 import CategorySection from '../components/CategorySection';
+import PhotoLightbox from '../components/PhotoLightbox';
 import { buildDisplaySegments } from '../utils/groupByCategory';
 
-function ItemRow({ item }) {
+function ItemRow({ item, onOpenPhoto }) {
     return (
         <li className={`checklist-item${item.is_done ? ' checklist-item--done' : ''}`}>
             <div className="checklist-item__main">
@@ -32,9 +33,9 @@ function ItemRow({ item }) {
                     {item.comment && <div className="hint">Комментарий: {item.comment}</div>}
                     {item.photo_url && (
                         <div className="checklist-item__photo">
-                            <a href={item.photo_url} target="_blank" rel="noopener noreferrer">
+                            <button type="button" className="clickable-photo" onClick={() => onOpenPhoto(item.photo_url)}>
                                 <img src={item.photo_url} alt="" className="checklist-item__thumb" />
-                            </a>
+                            </button>
                         </div>
                     )}
                     {item.template_item.requires_photo && !item.photo_url && (
@@ -55,6 +56,7 @@ export default function AssignmentDetailPage() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [lightboxUrl, setLightboxUrl] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -120,14 +122,14 @@ export default function AssignmentDetailPage() {
             <ul className="checklist-items">
                 {segments.map((segment, index) =>
                     segment.type === 'item' ? (
-                        <ItemRow key={segment.item.id} item={segment.item} />
+                        <ItemRow key={segment.item.id} item={segment.item} onOpenPhoto={setLightboxUrl} />
                     ) : (
                         <CategorySection
                             key={`cat-${index}`}
                             name={segment.name}
                             items={segment.items}
                             doneCount={segment.items.filter((i) => i.is_done).length}
-                            renderItem={(item) => <ItemRow key={item.id} item={item} />}
+                            renderItem={(item) => <ItemRow key={item.id} item={item} onOpenPhoto={setLightboxUrl} />}
                         />
                     )
                 )}
@@ -136,13 +138,15 @@ export default function AssignmentDetailPage() {
             <section className="signature-section">
                 <h2>Подпись сотрудника</h2>
                 {assignment.signature_url ? (
-                    <a href={assignment.signature_url} target="_blank" rel="noopener noreferrer">
+                    <button type="button" className="clickable-photo" onClick={() => setLightboxUrl(assignment.signature_url)}>
                         <img src={assignment.signature_url} alt="Подпись" className="signature-pad__preview" />
-                    </a>
+                    </button>
                 ) : (
                     <p className="hint">Подпись ещё не поставлена.</p>
                 )}
             </section>
+
+            {lightboxUrl && <PhotoLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
         </div>
     );
 }
