@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import StatusBadge from '../components/StatusBadge';
+import { SkeletonRows } from '../components/Skeleton';
 
 function isToday(dateStr) {
     if (!dateStr) return false;
@@ -49,7 +50,14 @@ export default function EmployeeChecklistsPage() {
         };
     }, [api]);
 
-    if (loading) return <p>Загрузка...</p>;
+    if (loading) {
+        return (
+            <div className="page">
+                <div className="skeleton skeleton-text" style={{ height: 24, width: '45%', marginBottom: 16 }} />
+                <SkeletonRows count={4} />
+            </div>
+        );
+    }
     if (error) return <p className="error-text">{error}</p>;
 
     const standing = assignments.filter((a) => a.is_standing);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
+import { SkeletonRows } from '../components/Skeleton';
 
 const RULE_TYPE_LABELS = {
     auto_late: 'авто (опоздание)',
@@ -88,7 +89,7 @@ export default function PenaltiesPage() {
                 </div>
             </div>
 
-            {loading && <p>Загрузка...</p>}
+            {loading && <SkeletonRows count={5} />}
             {error && <p className="error-text">{error}</p>}
 
             {!loading && !error && (

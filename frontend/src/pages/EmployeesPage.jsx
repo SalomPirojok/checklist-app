@@ -4,6 +4,7 @@ import { useApiClient } from '../api/useApiClient';
 import { useAuth } from '../context/AuthContext';
 import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import { ROLE_LABELS, canActOnRole } from '../constants';
+import { SkeletonRows } from '../components/Skeleton';
 
 const emptyForm = { telegram_id: '', full_name: '', username: '', role: 'employee' };
 
@@ -153,17 +154,12 @@ export default function EmployeesPage() {
             </div>
 
             {loading && (
-                <p>
-                    Загрузка...
+                <>
+                    <SkeletonRows count={5} />
                     {showSlowHint && (
-                        <>
-                            {' '}
-                            <span className="hint">
-                                Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.
-                            </span>
-                        </>
+                        <p className="hint">Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.</p>
                     )}
-                </p>
+                </>
             )}
             {listError && <p className="error-text">{listError}</p>}
 

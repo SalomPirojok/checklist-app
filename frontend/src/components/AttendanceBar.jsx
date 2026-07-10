@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useApiUpload } from '../api/useApiClient';
+import { hapticError, hapticSuccess } from '../lib/haptics';
 
 function formatTime(isoString) {
     return new Date(isoString).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -23,9 +24,11 @@ export default function AttendanceBar({ attendance, onCheckedOut }) {
             formData.append('type', 'check_out');
             formData.append('photo', file);
             await upload('/api/attendance', formData);
+            hapticSuccess();
             onCheckedOut();
         } catch (err) {
             setError(err.message);
+            hapticError();
         } finally {
             setUploading(false);
         }

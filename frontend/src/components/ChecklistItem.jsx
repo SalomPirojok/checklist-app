@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { hapticError, hapticSelect, hapticTap } from '../lib/haptics';
 
 export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSaveComment, onToggleSubCheckbox, readOnly }) {
     const fileInputRef = useRef(null);
@@ -21,8 +22,10 @@ export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSav
         setUploadError(null);
         try {
             await onUploadPhoto(item, file);
+            hapticTap();
         } catch (err) {
             setUploadError(err.message);
+            hapticError();
         } finally {
             setUploading(false);
         }
@@ -40,11 +43,17 @@ export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSav
     // overwrite it.
     async function handleSubToggle(subId, checked) {
         setSubSaving(true);
+        hapticSelect();
         try {
             await onToggleSubCheckbox(item, subId, checked);
         } finally {
             setSubSaving(false);
         }
+    }
+
+    function handleToggleDone(nextDone) {
+        hapticTap();
+        onToggleDone(item, nextDone);
     }
 
     return (
@@ -55,7 +64,7 @@ export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSav
                         type="button"
                         className="checklist-item__check"
                         disabled={readOnly || (!isDone && !subsComplete)}
-                        onClick={() => onToggleDone(item, !isDone)}
+                        onClick={() => handleToggleDone(!isDone)}
                         aria-label={isDone ? 'Отменить выполнение' : 'Отметить выполненным'}
                     >
                         {isDone ? '✓' : ''}
@@ -116,7 +125,7 @@ export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSav
                                 </>
                             )}
                             {isDone && !readOnly && (
-                                <button type="button" className="btn btn--ghost" onClick={() => onToggleDone(item, false)}>
+                                <button type="button" className="btn btn--ghost" onClick={() => handleToggleDone(false)}>
                                     Отменить
                                 </button>
                             )}

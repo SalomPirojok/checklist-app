@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
+import { SkeletonBlocks } from '../components/Skeleton';
 
 function toDateStr(date) {
     return date.toISOString().slice(0, 10);
@@ -106,7 +107,7 @@ export default function ReportsPage() {
                 </div>
             )}
 
-            {loading && <p>Загрузка...</p>}
+            {loading && <SkeletonBlocks count={2} />}
             {error && <p className="error-text">{error}</p>}
 
             {!loading &&

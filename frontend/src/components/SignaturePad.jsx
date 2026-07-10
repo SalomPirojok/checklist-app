@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { hapticTap } from '../lib/haptics';
 
 export default function SignaturePad({ onSave, saving, disabled }) {
     const canvasRef = useRef(null);
@@ -91,7 +92,10 @@ export default function SignaturePad({ onSave, saving, disabled }) {
 
     function handleSave() {
         canvasRef.current.toBlob((blob) => {
-            if (blob) onSave(blob);
+            if (blob) {
+                hapticTap();
+                onSave(blob);
+            }
         }, 'image/png');
     }
 
@@ -111,7 +115,7 @@ export default function SignaturePad({ onSave, saving, disabled }) {
                 <button type="button" className="btn btn--ghost" onClick={handleClear} disabled={disabled || isEmpty}>
                     Очистить
                 </button>
-                <button type="button" className="btn" onClick={handleSave} disabled={disabled || isEmpty || saving}>
+                <button type="button" className="btn btn--large" onClick={handleSave} disabled={disabled || isEmpty || saving}>
                     {saving ? 'Сохранение...' : 'Сохранить подпись'}
                 </button>
             </div>

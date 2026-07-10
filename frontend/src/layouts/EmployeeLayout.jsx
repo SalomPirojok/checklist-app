@@ -33,7 +33,7 @@ export default function EmployeeLayout() {
         loadAttendance();
     }, [api]);
 
-    if (loading) return <p>Загрузка...</p>;
+    if (loading) return <div className="screen screen-center"><div className="spinner" /></div>;
     if (error) return <p className="error-text">{error}</p>;
 
     if (!attendance.check_in) {

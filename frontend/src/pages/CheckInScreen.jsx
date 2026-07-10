@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { useApiUpload } from '../api/useApiClient';
+import { hapticError, hapticSuccess } from '../lib/haptics';
 
 export default function CheckInScreen({ onCheckedIn }) {
     const upload = useApiUpload();
@@ -19,9 +20,11 @@ export default function CheckInScreen({ onCheckedIn }) {
             formData.append('type', 'check_in');
             formData.append('photo', file);
             await upload('/api/attendance', formData);
+            hapticSuccess();
             onCheckedIn();
         } catch (err) {
             setError(err.message);
+            hapticError();
         } finally {
             setUploading(false);
         }
@@ -35,7 +38,7 @@ export default function CheckInScreen({ onCheckedIn }) {
 
                 <button
                     type="button"
-                    className="btn"
+                    className="btn btn--large btn--block"
                     disabled={uploading}
                     onClick={() => fileInputRef.current?.click()}
                 >

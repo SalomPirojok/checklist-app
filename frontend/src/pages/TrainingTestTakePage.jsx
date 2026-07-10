@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
+import { SkeletonRows } from '../components/Skeleton';
+import { hapticError, hapticSuccess } from '../lib/haptics';
 
 export default function TrainingTestTakePage() {
     const api = useApiClient();
@@ -55,8 +57,11 @@ export default function TrainingTestTakePage() {
                 },
             });
             setResult(res);
+            if (res.attempt.passed) hapticSuccess();
+            else hapticError();
         } catch (err) {
             setError(err.message);
+            hapticError();
         } finally {
             setSubmitting(false);
         }
@@ -67,7 +72,14 @@ export default function TrainingTestTakePage() {
         setResult(null);
     }
 
-    if (loading) return <p>Загрузка...</p>;
+    if (loading) {
+        return (
+            <div className="page">
+                <div className="skeleton skeleton-text" style={{ height: 24, width: '30%', marginBottom: 16 }} />
+                <SkeletonRows count={4} />
+            </div>
+        );
+    }
     if (error && !test) return <p className="error-text">{error}</p>;
 
     if (result) {
@@ -88,8 +100,8 @@ export default function TrainingTestTakePage() {
                                 const isSelected = r.selected_option_id === o.id;
                                 const isCorrectOption = r.correct_option_id === o.id;
                                 let style = {};
-                                if (isCorrectOption) style = { color: 'var(--status-success, green)', fontWeight: 500 };
-                                else if (isSelected && !r.is_correct) style = { color: 'var(--status-danger, crimson)', textDecoration: 'line-through' };
+                                if (isCorrectOption) style = { color: 'var(--status-good)', fontWeight: 600 };
+                                else if (isSelected && !r.is_correct) style = { color: 'var(--status-critical)', textDecoration: 'line-through' };
                                 return (
                                     <div key={o.id} style={style}>
                                         {isSelected ? '● ' : '○ '}

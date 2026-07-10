@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import AssignChecklistModal from '../components/AssignChecklistModal';
+import { SkeletonRows } from '../components/Skeleton';
 
 export default function TemplatesPage() {
     const api = useApiClient();
@@ -91,17 +92,12 @@ export default function TemplatesPage() {
             )}
 
             {loading && (
-                <p>
-                    Загрузка...
+                <>
+                    <SkeletonRows count={5} />
                     {showSlowHint && (
-                        <>
-                            {' '}
-                            <span className="hint">
-                                Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.
-                            </span>
-                        </>
+                        <p className="hint">Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.</p>
                     )}
-                </p>
+                </>
             )}
             {error && <p className="error-text">{error}</p>}
 

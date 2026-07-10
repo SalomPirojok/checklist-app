@@ -7,6 +7,8 @@ import CategorySection from '../components/CategorySection';
 import SignaturePad from '../components/SignaturePad';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { buildDisplaySegments } from '../utils/groupByCategory';
+import { SkeletonRows } from '../components/Skeleton';
+import { hapticError, hapticSuccess } from '../lib/haptics';
 
 export default function EmployeeChecklistDetailPage() {
     const api = useApiClient();
@@ -106,8 +108,10 @@ export default function EmployeeChecklistDetailPage() {
             formData.append('signature', blob, 'signature.png');
             const res = await upload(`/api/assignments/${id}/signature`, formData);
             applyUpdate(null, null, res.assignment);
+            hapticSuccess();
         } catch (err) {
             setError(err.message);
+            hapticError();
         } finally {
             setSignatureSaving(false);
         }
@@ -125,7 +129,15 @@ export default function EmployeeChecklistDetailPage() {
         }
     }
 
-    if (loading) return <p>Загрузка...</p>;
+    if (loading) {
+        return (
+            <div className="page">
+                <div className="skeleton skeleton-text" style={{ height: 24, width: '55%', marginBottom: 16 }} />
+                <div className="skeleton skeleton-block" style={{ height: 8, marginBottom: 20 }} />
+                <SkeletonRows count={5} />
+            </div>
+        );
+    }
     if (error && !assignment) return <p className="error-text">{error}</p>;
     if (!assignment) return null;
 

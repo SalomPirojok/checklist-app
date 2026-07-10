@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import { useAuth } from '../context/AuthContext';
+import { SkeletonRows } from '../components/Skeleton';
 
 function canManageTrainingClientSide(user) {
     return user.role === 'owner' || (user.role === 'manager' && user.can_manage_training);
@@ -58,7 +59,7 @@ export default function TrainingPage() {
                 )}
             </div>
 
-            {loading && <p>Загрузка...</p>}
+            {loading && <SkeletonRows count={5} />}
             {error && <p className="error-text">{error}</p>}
 
             {!loading && !error && (

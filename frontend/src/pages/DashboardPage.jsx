@@ -5,6 +5,7 @@ import { useDelayedFlag } from '../hooks/useDelayedFlag';
 import StatTile from '../components/StatTile';
 import StatusBadge from '../components/StatusBadge';
 import PhotoLightbox from '../components/PhotoLightbox';
+import { SkeletonKpiRow, SkeletonRows } from '../components/Skeleton';
 
 const STAT_ORDER = [
     ['not_started', 'Не начато'],
@@ -105,17 +106,14 @@ export default function DashboardPage() {
 
     if (loading) {
         return (
-            <p>
-                Загрузка...
+            <div className="page">
+                <div className="skeleton skeleton-text" style={{ height: 24, width: '40%', marginBottom: 16 }} />
+                <SkeletonKpiRow />
+                <SkeletonRows count={4} />
                 {showSlowHint && (
-                    <>
-                        {' '}
-                        <span className="hint">
-                            Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.
-                        </span>
-                    </>
+                    <p className="hint">Сервер мог «заснуть» из-за простоя — обычно просыпается в течение минуты.</p>
                 )}
-            </p>
+            </div>
         );
     }
     if (error) return <p className="error-text">{error}</p>;
