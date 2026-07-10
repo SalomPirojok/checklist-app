@@ -105,10 +105,13 @@ body {
     flex: 1;
     text-align: center;
     padding: 8px;
+    border: none;
     border-radius: 8px;
     font-size: 14px;
     text-decoration: none;
+    background: transparent;
     color: var(--tg-theme-text-color, #1c1c1e);
+    cursor: pointer;
 }
 
 .tab-bar__item--active {

@@ -14,6 +14,7 @@ export default function TemplatesPage() {
     const showSlowHint = useDelayedFlag(loading, 4000);
     const [assigningTemplate, setAssigningTemplate] = useState(null);
     const [assignedMessage, setAssignedMessage] = useState(null);
+    const [departmentFilter, setDepartmentFilter] = useState('');
 
     async function load() {
         setLoading(true);
@@ -39,6 +40,7 @@ export default function TemplatesPage() {
     }, [api]);
 
     const departmentById = new Map(departments.map((d) => [d.id, d]));
+    const visibleTemplates = departmentFilter ? templates.filter((t) => t.department_id === departmentFilter) : templates;
 
     async function handleArchive(template) {
         if (!confirm(`Архивировать шаблон «${template.title}»?`)) return;
@@ -65,6 +67,29 @@ export default function TemplatesPage() {
             </div>
 
             {assignedMessage && <p className="success-text">{assignedMessage}</p>}
+
+            {departments.length > 0 && (
+                <div className="tab-bar" style={{ marginBottom: '12px' }}>
+                    <button
+                        type="button"
+                        className={departmentFilter === '' ? 'tab-bar__item tab-bar__item--active' : 'tab-bar__item'}
+                        onClick={() => setDepartmentFilter('')}
+                    >
+                        Все
+                    </button>
+                    {departments.map((dept) => (
+                        <button
+                            type="button"
+                            key={dept.id}
+                            className={departmentFilter === dept.id ? 'tab-bar__item tab-bar__item--active' : 'tab-bar__item'}
+                            onClick={() => setDepartmentFilter(dept.id)}
+                        >
+                            {dept.name}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {loading && (
                 <p>
                     Загрузка...
@@ -82,8 +107,10 @@ export default function TemplatesPage() {
 
             {!loading && !error && (
                 <ul className="list">
-                    {templates.length === 0 && <p className="hint">Шаблонов пока нет.</p>}
-                    {templates.map((template) => (
+                    {visibleTemplates.length === 0 && (
+                        <p className="hint">{departmentFilter ? 'Нет шаблонов для этого подразделения.' : 'Шаблонов пока нет.'}</p>
+                    )}
+                    {visibleTemplates.map((template) => (
                         <li key={template.id} className="list-row">
                             <div>
                                 <Link to={`/templates/${template.id}`} className="list-row__title list-row__title--link">
