@@ -5,7 +5,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { uploadAttendancePhoto, verifyAttendancePhotoBelongsToUser } from '../lib/storage.js';
 import { computeLateness } from '../lib/lateness.js';
-import { resolveScheduleForDepartment } from '../lib/schedule.js';
+import { loadDepartmentScheduleDays, resolveScheduleForDay } from '../lib/schedule.js';
 import { sendTelegramMessage } from '../lib/telegramNotify.js';
 
 const router = Router();
@@ -136,7 +136,11 @@ router.post('/', upload.single('photo'), async (req, res) => {
     if (orgFetchError) console.error('Failed to load organization settings for attendance side-effects:', orgFetchError.message);
     if (employeeError) console.error('Failed to load employee for attendance side-effects:', employeeError.message);
 
-    const schedule = org ? await resolveScheduleForDepartment(employee?.department_id, org.shift_start_time) : null;
+    let schedule = null;
+    if (org) {
+        const scheduleDays = await loadDepartmentScheduleDays(employee?.department_id);
+        schedule = resolveScheduleForDay(scheduleDays, new Date(record.created_at).getUTCDay(), org.shift_start_time);
+    }
 
     if (type === 'check_in' && org && schedule) {
         try {

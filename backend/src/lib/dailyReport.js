@@ -1,5 +1,6 @@
 import { supabase } from './supabase.js';
 import { computeLateness } from './lateness.js';
+import { resolveScheduleForDay } from './schedule.js';
 
 function startOfDayUTC(date) {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString();
@@ -30,18 +31,21 @@ export async function buildDailyReport(organizationId, day) {
     const orgUserIds = orgUsers.map((u) => u.id);
     const activeStaff = orgUsers.filter((u) => u.is_active && u.role !== 'owner');
 
-    const { data: departmentSchedules, error: scheduleError } = await supabase
-        .from('department_schedules')
-        .select('department_id, start_time, days_of_week')
+    const { data: allScheduleDays, error: scheduleError } = await supabase
+        .from('department_schedule_days')
+        .select('department_id, day_of_week, status, start_time, end_time')
         .eq('organization_id', organizationId);
     if (scheduleError) throw new Error(scheduleError.message);
-    const scheduleByDepartment = new Map(departmentSchedules.map((s) => [s.department_id, s]));
+    const scheduleDaysByDepartment = new Map();
+    for (const row of allScheduleDays) {
+        if (!scheduleDaysByDepartment.has(row.department_id)) scheduleDaysByDepartment.set(row.department_id, new Map());
+        scheduleDaysByDepartment.get(row.department_id).set(row.day_of_week, row);
+    }
+    const dayOfWeek = new Date(dayStart).getUTCDay();
 
     function scheduleForUser(user) {
-        const deptSchedule = user.department_id ? scheduleByDepartment.get(user.department_id) : null;
-        return deptSchedule
-            ? { startTime: deptSchedule.start_time, daysOfWeek: deptSchedule.days_of_week }
-            : { startTime: org.shift_start_time, daysOfWeek: null };
+        const deptDays = (user.department_id && scheduleDaysByDepartment.get(user.department_id)) || new Map();
+        return resolveScheduleForDay(deptDays, dayOfWeek, org.shift_start_time);
     }
 
     const [
