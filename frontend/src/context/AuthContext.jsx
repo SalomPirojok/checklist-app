@@ -9,7 +9,8 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
     const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY));
     const [user, setUser] = useState(null);
-    const [status, setStatus] = useState('loading'); // 'loading' | 'authenticated' | 'error'
+    // 'loading' | 'authenticated' | 'error' | 'unregistered' | 'suspended'
+    const [status, setStatus] = useState('loading');
     const [error, setError] = useState(null);
     const hasStarted = useRef(false);
 
@@ -45,12 +46,32 @@ export function AuthProvider({ children }) {
                 setUser(data.user);
                 setStatus('authenticated');
             } catch (err) {
-                setStatus('error');
-                setError(err.message);
+                if (err.code === 'NOT_REGISTERED') {
+                    setStatus('unregistered');
+                } else if (err.code === 'ORG_SUSPENDED') {
+                    setStatus('suspended');
+                    setError(err.message);
+                } else {
+                    setStatus('error');
+                    setError(err.message);
+                }
             }
         }
 
         authenticate();
+    }, []);
+
+    // User-initiated only -- never called implicitly by the authenticate() effect.
+    const register = useCallback(async (organizationName) => {
+        const initData = WebApp.initData;
+        const data = await apiFetch('/api/auth/register-organization', {
+            method: 'POST',
+            body: { initData, organization_name: organizationName },
+        });
+        localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+        setToken(data.token);
+        setUser(data.user);
+        setStatus('authenticated');
     }, []);
 
     const logout = useCallback(() => {
@@ -62,7 +83,7 @@ export function AuthProvider({ children }) {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ token, user, status, error, logout }}>
+        <AuthContext.Provider value={{ token, user, status, error, register, logout }}>
             {children}
         </AuthContext.Provider>
     );

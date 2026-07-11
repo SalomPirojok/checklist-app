@@ -60,6 +60,11 @@ export default function EmployeeLayout() {
                 <NavLink to="/schedule" className={tabClass}>
                     График
                 </NavLink>
+                {user.is_platform_admin && (
+                    <NavLink to="/platform-admin" className={tabClass}>
+                        Админ
+                    </NavLink>
+                )}
             </nav>
 
             <main className="app-main">
