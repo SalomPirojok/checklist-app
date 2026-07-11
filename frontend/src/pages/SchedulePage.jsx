@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApiClient } from '../api/useApiClient';
 import { useAuth } from '../context/AuthContext';
+import { SkeletonBlocks } from '../components/Skeleton';
 
-const DAYS_OF_WEEK = [
+const DISPLAY_DAYS = [
     { value: 1, label: 'Пн' },
     { value: 2, label: 'Вт' },
     { value: 3, label: 'Ср' },
@@ -13,52 +14,26 @@ const DAYS_OF_WEEK = [
     { value: 0, label: 'Вс' },
 ];
 
-function formatDays(daysOfWeek) {
-    if (!daysOfWeek || daysOfWeek.length === 0) return 'дни не заданы';
-    const set = new Set(daysOfWeek);
-    return DAYS_OF_WEEK.filter((d) => set.has(d.value))
-        .map((d) => d.label)
-        .join(', ');
-}
+const STATUS_LABELS = { work: 'Работа', off: 'Выходной', undefined: 'Не задано' };
 
-function ScheduleEditor({ departmentId, initial, onSaved, onCancel, api }) {
-    const [daysOfWeek, setDaysOfWeek] = useState(initial?.days_of_week || DAYS_OF_WEEK.map((d) => d.value));
+function DayCellEditor({ department, dayOfWeek, dayLabel, initial, onSave, onClose }) {
+    const [status, setStatus] = useState(initial?.status || 'undefined');
     const [startTime, setStartTime] = useState((initial?.start_time || '09:00').slice(0, 5));
     const [endTime, setEndTime] = useState((initial?.end_time || '18:00').slice(0, 5));
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
 
-    function toggleDay(day) {
-        setDaysOfWeek((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
-    }
-
     async function handleSave() {
-        if (daysOfWeek.length === 0) {
-            setError('Выберите хотя бы один день недели.');
-            return;
-        }
         setSaving(true);
         setError(null);
         try {
-            await api(`/api/schedules/${departmentId}`, {
-                method: 'PUT',
-                body: { days_of_week: daysOfWeek, start_time: startTime, end_time: endTime },
+            await onSave({
+                day_of_week: dayOfWeek,
+                status,
+                start_time: status === 'work' ? startTime : null,
+                end_time: status === 'work' ? endTime : null,
             });
-            onSaved();
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setSaving(false);
-        }
-    }
-
-    async function handleClear() {
-        if (!confirm('Убрать расписание для этого подразделения? Будет использоваться общее время смены организации.')) return;
-        setSaving(true);
-        setError(null);
-        try {
-            await api(`/api/schedules/${departmentId}`, { method: 'DELETE' });
-            onSaved();
+            onClose();
         } catch (err) {
             setError(err.message);
         } finally {
@@ -67,43 +42,52 @@ function ScheduleEditor({ departmentId, initial, onSaved, onCancel, api }) {
     }
 
     return (
-        <div className="modal" style={{ marginTop: '8px' }}>
-            <label className="field">
-                <span>Дни недели</span>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {DAYS_OF_WEEK.map((d) => (
-                        <label key={d.value} className="checkbox-field" style={{ gap: '4px' }}>
-                            <input type="checkbox" checked={daysOfWeek.includes(d.value)} onChange={() => toggleDay(d.value)} />
-                            <span>{d.label}</span>
-                        </label>
-                    ))}
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <h2>{department.name}</h2>
+                <p className="hint">{dayLabel}</p>
+
+                <div className="form">
+                    <label className="field">
+                        <span>Статус</span>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            {['work', 'off', 'undefined'].map((s) => (
+                                <button
+                                    key={s}
+                                    type="button"
+                                    className={`tab-bar__item${status === s ? ' tab-bar__item--active' : ''}`}
+                                    onClick={() => setStatus(s)}
+                                >
+                                    {STATUS_LABELS[s]}
+                                </button>
+                            ))}
+                        </div>
+                    </label>
+
+                    {status === 'work' && (
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <label className="field">
+                                <span>Начало</span>
+                                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                            </label>
+                            <label className="field">
+                                <span>Конец</span>
+                                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                            </label>
+                        </div>
+                    )}
+
+                    {error && <p className="error-text">{error}</p>}
+
+                    <div className="form-actions">
+                        <button type="button" className="btn btn--ghost" onClick={onClose}>
+                            Отмена
+                        </button>
+                        <button type="button" className="btn" onClick={handleSave} disabled={saving}>
+                            {saving ? 'Сохранение...' : 'Сохранить'}
+                        </button>
+                    </div>
                 </div>
-            </label>
-            <div style={{ display: 'flex', gap: '12px' }}>
-                <label className="field">
-                    <span>Начало смены</span>
-                    <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
-                </label>
-                <label className="field">
-                    <span>Конец смены</span>
-                    <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
-                </label>
-            </div>
-
-            {error && <p className="error-text">{error}</p>}
-
-            <div className="form-actions">
-                <button type="button" className="btn btn--ghost" onClick={onCancel}>
-                    Отмена
-                </button>
-                {initial && (
-                    <button type="button" className="btn btn--ghost btn--danger" onClick={handleClear} disabled={saving}>
-                        Убрать расписание
-                    </button>
-                )}
-                <button type="button" className="btn" onClick={handleSave} disabled={saving}>
-                    {saving ? 'Сохранение...' : 'Сохранить'}
-                </button>
             </div>
         </div>
     );
@@ -115,17 +99,19 @@ export default function SchedulePage() {
     const { user } = useAuth();
     const canManage = user.role === 'owner' || user.role === 'manager';
 
-    const [departmentSchedules, setDepartmentSchedules] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [scheduleDays, setScheduleDays] = useState([]);
     const [defaultShiftStartTime, setDefaultShiftStartTime] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [editingDeptId, setEditingDeptId] = useState(null);
+    const [editingCell, setEditingCell] = useState(null);
 
     async function load() {
         setLoading(true);
         try {
             const res = await api('/api/schedules');
-            setDepartmentSchedules(res.department_schedules);
+            setDepartments(res.departments);
+            setScheduleDays(res.schedule_days);
             setDefaultShiftStartTime(res.default_shift_start_time);
             setError(null);
         } catch (err) {
@@ -140,67 +126,99 @@ export default function SchedulePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api]);
 
+    const dayByKey = useMemo(() => {
+        const map = new Map();
+        for (const d of scheduleDays) map.set(`${d.department_id}_${d.day_of_week}`, d);
+        return map;
+    }, [scheduleDays]);
+
+    async function saveCell(departmentId, payload) {
+        const res = await api(`/api/schedules/${departmentId}`, { method: 'PUT', body: payload });
+        setScheduleDays((prev) => {
+            const key = `${res.schedule_day.department_id}_${res.schedule_day.day_of_week}`;
+            const others = prev.filter((d) => `${d.department_id}_${d.day_of_week}` !== key);
+            return [...others, res.schedule_day];
+        });
+    }
+
     return (
         <div className="page">
             <div className="page-header">
-                <h1>График работы</h1>
+                <h1>График подразделений</h1>
                 {canManage && (
                     <button type="button" className="btn btn--ghost" onClick={() => navigate('/shift-schedule')}>
-                        Конструктор смен
+                        Смены сотрудников
                     </button>
                 )}
             </div>
 
-            {loading && <p>Загрузка...</p>}
+            {loading && <SkeletonBlocks count={1} />}
             {error && <p className="error-text">{error}</p>}
 
             {!loading && !error && (
                 <>
-                    <ul className="list">
-                        {departmentSchedules.length === 0 && <p className="hint">Подразделений пока нет.</p>}
-                        {departmentSchedules.map(({ department, schedule }) => (
-                            <li key={department.id} className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                                    <div>
-                                        <div className="list-row__title">{department.name}</div>
-                                        {schedule ? (
-                                            <div className="hint">
-                                                {formatDays(schedule.days_of_week)} · {schedule.start_time.slice(0, 5)}–{schedule.end_time.slice(0, 5)}
-                                            </div>
-                                        ) : (
-                                            <div className="hint">Расписание не задано — используется общее время смены ({defaultShiftStartTime?.slice(0, 5)})</div>
-                                        )}
-                                    </div>
-                                    {canManage && (
-                                        <button
-                                            type="button"
-                                            className="btn btn--ghost"
-                                            onClick={() => setEditingDeptId(editingDeptId === department.id ? null : department.id)}
-                                        >
-                                            {editingDeptId === department.id ? 'Закрыть' : 'Изменить'}
-                                        </button>
-                                    )}
-                                </div>
-                                {canManage && editingDeptId === department.id && (
-                                    <ScheduleEditor
-                                        departmentId={department.id}
-                                        initial={schedule}
-                                        api={api}
-                                        onCancel={() => setEditingDeptId(null)}
-                                        onSaved={async () => {
-                                            setEditingDeptId(null);
-                                            await load();
-                                        }}
-                                    />
-                                )}
-                            </li>
-                        ))}
-                    </ul>
+                    {departments.length === 0 ? (
+                        <p className="hint">Подразделений пока нет.</p>
+                    ) : (
+                        <div className="shift-grid-wrapper">
+                            <table className="shift-grid">
+                                <thead>
+                                    <tr>
+                                        <th className="shift-grid__name-col">Подразделение</th>
+                                        {DISPLAY_DAYS.map((d) => (
+                                            <th key={d.value}>{d.label}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {departments.map((dept) => (
+                                        <tr key={dept.id}>
+                                            <td className="shift-grid__name-col">{dept.name}</td>
+                                            {DISPLAY_DAYS.map((d) => {
+                                                const row = dayByKey.get(`${dept.id}_${d.value}`);
+                                                const status = row?.status || 'undefined';
+                                                return (
+                                                    <td key={d.value}>
+                                                        <button
+                                                            type="button"
+                                                            className={`shift-cell-btn shift-cell-btn--${status}`}
+                                                            disabled={!canManage}
+                                                            onClick={() =>
+                                                                canManage &&
+                                                                setEditingCell({ department: dept, dayOfWeek: d.value, dayLabel: d.label })
+                                                            }
+                                                        >
+                                                            {status === 'work' && row.start_time
+                                                                ? `${row.start_time.slice(0, 5)}–${row.end_time?.slice(0, 5) || ''}`
+                                                                : status === 'off'
+                                                                  ? 'Вых'
+                                                                  : ''}
+                                                        </button>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
 
                     <p className="hint" style={{ marginTop: '12px' }}>
-                        Сотрудники без подразделения работают по общему времени смены организации: {defaultShiftStartTime?.slice(0, 5)}.
+                        Дни без явного статуса («Не задано») используют общее время смены организации: {defaultShiftStartTime?.slice(0, 5)}.
                     </p>
                 </>
+            )}
+
+            {editingCell && (
+                <DayCellEditor
+                    department={editingCell.department}
+                    dayOfWeek={editingCell.dayOfWeek}
+                    dayLabel={editingCell.dayLabel}
+                    initial={dayByKey.get(`${editingCell.department.id}_${editingCell.dayOfWeek}`)}
+                    onSave={(payload) => saveCell(editingCell.department.id, payload)}
+                    onClose={() => setEditingCell(null)}
+                />
             )}
         </div>
     );
