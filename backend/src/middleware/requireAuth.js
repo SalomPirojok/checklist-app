@@ -15,6 +15,7 @@ export function requireAuth(req, res, next) {
             telegramId: payload.telegramId,
             organizationId: payload.organizationId,
             role: payload.role,
+            isPlatformAdmin: !!payload.isPlatformAdmin,
         };
         next();
     } catch {
