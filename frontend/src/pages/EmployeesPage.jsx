@@ -19,6 +19,7 @@ export default function EmployeesPage() {
     const [listError, setListError] = useState(null);
     const showSlowHint = useDelayedFlag(loading, 4000);
 
+    const [showInactive, setShowInactive] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState(emptyForm);
     const [editingId, setEditingId] = useState(null);
@@ -156,6 +157,9 @@ export default function EmployeesPage() {
         }
     }
 
+    const inactiveCount = employees.filter((e) => !e.is_active).length;
+    const visibleEmployees = showInactive ? employees : employees.filter((e) => e.is_active);
+
     return (
         <div className="page">
             <div className="page-header">
@@ -182,10 +186,21 @@ export default function EmployeesPage() {
             )}
             {listError && <p className="error-text">{listError}</p>}
 
+            {inactiveCount > 0 && (
+                <button
+                    type="button"
+                    className="btn btn--ghost"
+                    style={{ marginBottom: '8px' }}
+                    onClick={() => setShowInactive((v) => !v)}
+                >
+                    {showInactive ? 'Скрыть деактивированных' : `Показать деактивированных (${inactiveCount})`}
+                </button>
+            )}
+
             {!loading && !listError && (
                 <ul className="list">
-                    {employees.length === 0 && <p className="hint">Сотрудников пока нет.</p>}
-                    {employees.map((employee) => {
+                    {visibleEmployees.length === 0 && <p className="hint">Сотрудников пока нет.</p>}
+                    {visibleEmployees.map((employee) => {
                         const canAct = canActOnRole(currentUser.role, employee.role);
                         return (
                             <li key={employee.id} className="list-row">
