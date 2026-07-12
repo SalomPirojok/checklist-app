@@ -7,6 +7,15 @@ import { SkeletonBlocks } from '../components/Skeleton';
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const STATUS_LABELS = { work: 'Работа', off: 'Выходной', undefined: 'Не задано' };
 
+const COLOR_PALETTE = [
+    { name: 'Жёлтый', hex: '#fde68a' },
+    { name: 'Оранжевый', hex: '#fdba74' },
+    { name: 'Розовый', hex: '#fca5a5' },
+    { name: 'Голубой', hex: '#93c5fd' },
+    { name: 'Фиолетовый', hex: '#c4b5fd' },
+    { name: 'Бирюзовый', hex: '#5eead4' },
+];
+
 function toDateStr(date) {
     return date.toISOString().slice(0, 10);
 }
@@ -38,6 +47,7 @@ function CellEditor({ employee, dateStr, dateLabel, initial, onSave, onClear, on
     const [status, setStatus] = useState(initial?.status || 'undefined');
     const [startTime, setStartTime] = useState((initial?.start_time || '09:00').slice(0, 5));
     const [endTime, setEndTime] = useState((initial?.end_time || '18:00').slice(0, 5));
+    const [colorOverride, setColorOverride] = useState(initial?.color_override || null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
 
@@ -51,6 +61,7 @@ function CellEditor({ employee, dateStr, dateLabel, initial, onSave, onClear, on
                 status,
                 start_time: status === 'work' ? startTime : null,
                 end_time: status === 'work' ? endTime : null,
+                color_override: colorOverride,
             });
             onClose();
         } catch (err) {
@@ -108,6 +119,46 @@ function CellEditor({ employee, dateStr, dateLabel, initial, onSave, onClear, on
                             </label>
                         </div>
                     )}
+
+                    <label className="field">
+                        <span>Цвет ячейки</span>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                onClick={() => setColorOverride(null)}
+                                aria-label="Без цвета"
+                                style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: '50%',
+                                    border: colorOverride === null ? '2px solid var(--tg-theme-button-color, #2481cc)' : '1px solid var(--border-color)',
+                                    background: 'var(--card-bg)',
+                                    cursor: 'pointer',
+                                    fontSize: 14,
+                                    lineHeight: '26px',
+                                    color: 'var(--tg-theme-hint-color, #6b7280)',
+                                }}
+                            >
+                                ×
+                            </button>
+                            {COLOR_PALETTE.map((c) => (
+                                <button
+                                    key={c.hex}
+                                    type="button"
+                                    onClick={() => setColorOverride(c.hex)}
+                                    aria-label={c.name}
+                                    style={{
+                                        width: 28,
+                                        height: 28,
+                                        borderRadius: '50%',
+                                        border: colorOverride === c.hex ? '2px solid var(--tg-theme-button-color, #2481cc)' : '1px solid var(--border-color)',
+                                        background: c.hex,
+                                        cursor: 'pointer',
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    </label>
 
                     {error && <p className="error-text">{error}</p>}
 
@@ -307,7 +358,7 @@ export default function ShiftSchedulePage() {
     }
 
     async function clearCell({ user_id, shift_date }) {
-        await saveCell({ user_id, shift_date, status: 'undefined', start_time: null, end_time: null });
+        await saveCell({ user_id, shift_date, status: 'undefined', start_time: null, end_time: null, color_override: null });
     }
 
     async function handleCopyToNextWeek() {
@@ -328,6 +379,7 @@ export default function ShiftSchedulePage() {
                     status: s.status,
                     start_time: s.start_time ? s.start_time.slice(0, 5) : null,
                     end_time: s.end_time ? s.end_time.slice(0, 5) : null,
+                    color_override: s.color_override || null,
                 };
             });
             await api('/api/schedule/shifts/bulk', { method: 'POST', body: { shifts: bulkShifts } });
@@ -349,6 +401,7 @@ export default function ShiftSchedulePage() {
                 status: s.status,
                 start: s.start_time ? s.start_time.slice(0, 5) : null,
                 end: s.end_time ? s.end_time.slice(0, 5) : null,
+                color: s.color_override || null,
             };
         }
         await api('/api/schedule/templates', { method: 'POST', body: { name, template_data: templateData } });
@@ -379,6 +432,7 @@ export default function ShiftSchedulePage() {
                     status: entry.status || 'undefined',
                     start_time: entry.start || null,
                     end_time: entry.end || null,
+                    color_override: entry.color || null,
                 });
             }
         }
@@ -496,6 +550,7 @@ export default function ShiftSchedulePage() {
                                                 <button
                                                     type="button"
                                                     className={`shift-cell-btn shift-cell-btn--${status}`}
+                                                    style={shift?.color_override ? { background: shift.color_override, color: '#1c1c1e' } : undefined}
                                                     onClick={() => setEditingCell({ employee, dateStr })}
                                                 >
                                                     {status === 'work' && shift.start_time
