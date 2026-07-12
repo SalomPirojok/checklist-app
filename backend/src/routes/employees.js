@@ -327,4 +327,56 @@ router.delete('/:id', async (req, res) => {
     res.json({ employee: data });
 });
 
+// Permanent delete -- only allowed when the user has no footprint anywhere
+// (never completed a checklist, checked in, been penalized, taken a training
+// test, worked a shift, assigned/created something for others). Anything
+// with real history must be deactivated instead, never erased.
+router.delete('/:id/permanent', async (req, res) => {
+    const { data: target, error: lookupError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', req.params.id)
+        .eq('organization_id', req.user.organizationId)
+        .maybeSingle();
+
+    if (lookupError) return res.status(500).json({ error: 'Failed to fetch employee' });
+    if (!target) return res.status(404).json({ error: 'Employee not found' });
+    if (!canActOnRole(req.user.role, target.role)) {
+        return res.status(403).json({ error: 'Not allowed to delete this user' });
+    }
+
+    const userId = target.id;
+    const hasAnyRow = async (table, column) => {
+        const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(column, userId);
+        if (error) throw new Error(error.message);
+        return count > 0;
+    };
+
+    try {
+        const checks = await Promise.all([
+            hasAnyRow('checklist_assignments', 'assigned_to'),
+            hasAnyRow('checklist_assignments', 'assigned_by'),
+            hasAnyRow('checklist_templates', 'created_by'),
+            hasAnyRow('attendance_records', 'user_id'),
+            hasAnyRow('training_materials', 'created_by'),
+            hasAnyRow('training_tests', 'created_by'),
+            hasAnyRow('training_test_attempts', 'user_id'),
+            hasAnyRow('penalties', 'user_id'),
+            hasAnyRow('penalties', 'created_by'),
+            hasAnyRow('schedule_shifts', 'user_id'),
+        ]);
+        if (checks.some(Boolean)) {
+            return res.status(409).json({
+                error: 'У этого сотрудника есть история (чек-листы, посещаемость, штрафы, обучение или смены) — удалить нельзя. Используйте деактивацию.',
+            });
+        }
+    } catch (err) {
+        return res.status(500).json({ error: err.message || 'Failed to check employee history' });
+    }
+
+    const { error: deleteError } = await supabase.from('users').delete().eq('id', userId);
+    if (deleteError) return res.status(500).json({ error: 'Failed to delete employee' });
+    res.status(204).end();
+});
+
 export default router;

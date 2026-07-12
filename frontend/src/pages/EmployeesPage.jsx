@@ -134,6 +134,16 @@ export default function EmployeesPage() {
         }
     }
 
+    async function handleDelete(employee) {
+        if (!confirm(`Удалить ${employee.full_name} навсегда? Это действие необратимо.`)) return;
+        try {
+            await api(`/api/employees/${employee.id}/permanent`, { method: 'DELETE' });
+            await load();
+        } catch (err) {
+            setListError(err.message);
+        }
+    }
+
     async function handleToggleTraining(employee) {
         try {
             await api(`/api/employees/${employee.id}`, {
@@ -240,6 +250,9 @@ export default function EmployeesPage() {
                                                 Активировать
                                             </button>
                                         )}
+                                        <button className="btn btn--ghost btn--danger" onClick={() => handleDelete(employee)}>
+                                            Удалить
+                                        </button>
                                     </div>
                                 )}
                             </li>
