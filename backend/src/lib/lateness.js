@@ -1,7 +1,7 @@
 // Shared between the auto-penalty check, the instant attendance notification,
 // the daily report, and the employee profile, so "late" means the same thing
 // everywhere. `schedule` is { startTime: 'HH:MM'|null, isScheduledDay: boolean }
-// -- the day-of-week-specific result of resolveScheduleForDay().
+// -- the per-date result of resolveScheduleFromShift().
 export function computeLateness(checkInAt, schedule) {
     if (!schedule.isScheduledDay) {
         return { isLate: false, lateMinutes: 0, isScheduledDay: false };

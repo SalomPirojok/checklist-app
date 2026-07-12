@@ -5,7 +5,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { uploadAttendancePhoto, verifyAttendancePhotoBelongsToUser } from '../lib/storage.js';
 import { computeLateness } from '../lib/lateness.js';
-import { loadDepartmentScheduleDays, resolveScheduleForDay } from '../lib/schedule.js';
+import { resolveScheduleForShiftDate } from '../lib/schedule.js';
 import { sendTelegramMessage } from '../lib/telegramNotify.js';
 
 const router = Router();
@@ -128,18 +128,18 @@ router.post('/', upload.single('photo'), async (req, res) => {
     const [{ data: org, error: orgFetchError }, { data: employee, error: employeeError }] = await Promise.all([
         supabase
             .from('organizations')
-            .select('auto_penalty_enabled, late_threshold_minutes, late_penalty_amount, shift_start_time')
+            .select('auto_penalty_enabled, late_threshold_minutes, late_penalty_amount')
             .eq('id', req.user.organizationId)
             .single(),
-        supabase.from('users').select('full_name, department_id').eq('id', req.user.id).maybeSingle(),
+        supabase.from('users').select('full_name').eq('id', req.user.id).maybeSingle(),
     ]);
     if (orgFetchError) console.error('Failed to load organization settings for attendance side-effects:', orgFetchError.message);
     if (employeeError) console.error('Failed to load employee for attendance side-effects:', employeeError.message);
 
     let schedule = null;
     if (org) {
-        const scheduleDays = await loadDepartmentScheduleDays(employee?.department_id);
-        schedule = resolveScheduleForDay(scheduleDays, new Date(record.created_at).getUTCDay(), org.shift_start_time);
+        const dateStr = new Date(record.created_at).toISOString().slice(0, 10);
+        schedule = await resolveScheduleForShiftDate(req.user.id, dateStr);
     }
 
     if (type === 'check_in' && org && schedule) {

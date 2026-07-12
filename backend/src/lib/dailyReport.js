@@ -1,6 +1,6 @@
 import { supabase } from './supabase.js';
 import { computeLateness } from './lateness.js';
-import { resolveScheduleForDay } from './schedule.js';
+import { resolveScheduleFromShift } from './schedule.js';
 import { getOrgTemplateIds } from './orgTemplates.js';
 
 function startOfDayUTC(date) {
@@ -17,37 +17,24 @@ export async function buildDailyReport(organizationId, day) {
     const dayStart = startOfDayUTC(day);
     const dayEnd = endOfDayUTC(day);
 
-    const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .select('shift_start_time')
-        .eq('id', organizationId)
-        .single();
-    if (orgError) throw new Error(orgError.message);
-
     const { data: orgUsers, error: usersError } = await supabase
         .from('users')
-        .select('id, full_name, role, is_active, department_id')
+        .select('id, full_name, role, is_active')
         .eq('organization_id', organizationId);
     if (usersError) throw new Error(usersError.message);
     const orgUserIds = orgUsers.map((u) => u.id);
     const activeStaff = orgUsers.filter((u) => u.is_active && u.role !== 'owner');
     const orgTemplateIds = await getOrgTemplateIds(organizationId);
 
-    const { data: allScheduleDays, error: scheduleError } = await supabase
-        .from('department_schedule_days')
-        .select('department_id, day_of_week, status, start_time, end_time')
-        .eq('organization_id', organizationId);
-    if (scheduleError) throw new Error(scheduleError.message);
-    const scheduleDaysByDepartment = new Map();
-    for (const row of allScheduleDays) {
-        if (!scheduleDaysByDepartment.has(row.department_id)) scheduleDaysByDepartment.set(row.department_id, new Map());
-        scheduleDaysByDepartment.get(row.department_id).set(row.day_of_week, row);
-    }
-    const dayOfWeek = new Date(dayStart).getUTCDay();
+    const reportDateStr = dayStart.slice(0, 10);
+    const { data: shiftsForDay, error: shiftsError } = orgUserIds.length
+        ? await supabase.from('schedule_shifts').select('user_id, status, start_time').eq('shift_date', reportDateStr).in('user_id', orgUserIds)
+        : { data: [], error: null };
+    if (shiftsError) throw new Error(shiftsError.message);
+    const shiftByUser = new Map(shiftsForDay.map((s) => [s.user_id, s]));
 
     function scheduleForUser(user) {
-        const deptDays = (user.department_id && scheduleDaysByDepartment.get(user.department_id)) || new Map();
-        return resolveScheduleForDay(deptDays, dayOfWeek, org.shift_start_time);
+        return resolveScheduleFromShift(shiftByUser.get(user.id));
     }
 
     const [

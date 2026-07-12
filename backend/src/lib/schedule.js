@@ -1,29 +1,27 @@
 import { supabase } from './supabase.js';
 
-// Loads every configured day for a department once, so callers checking
-// lateness across many attendance records (e.g. an employee's whole history)
-// don't issue one query per record.
-export async function loadDepartmentScheduleDays(departmentId) {
-    if (!departmentId) return new Map();
-    const { data, error } = await supabase
-        .from('department_schedule_days')
-        .select('day_of_week, status, start_time, end_time')
-        .eq('department_id', departmentId);
-    if (error) throw new Error(error.message);
-    return new Map(data.map((row) => [row.day_of_week, row]));
+// Lateness is judged purely against the employee's own planned shift for that
+// exact date (schedule_shifts, filled in via the "Смены сотрудников"
+// constructor) -- not the department's weekly pattern or the org-wide
+// default. No shift entry, an 'undefined' status, or a 'work' entry missing
+// a start_time all mean "we don't know when they were expected", so no
+// penalty is possible; an explicit 'off' entry means "not a scheduled work
+// day" even if they checked in anyway.
+export function resolveScheduleFromShift(shift) {
+    if (!shift || shift.status !== 'work' || !shift.start_time) {
+        return { startTime: null, isScheduledDay: false };
+    }
+    return { startTime: shift.start_time, isScheduledDay: true };
 }
 
-// Resolves the applicable {startTime, isScheduledDay} for one specific day of
-// week (0 = Sunday .. 6 = Saturday): an explicit 'work' row uses its own
-// hours, an explicit 'off' row means "not a scheduled work day" (never late),
-// and no row (or an explicit 'undefined' row, i.e. not yet decided) falls
-// back to the organization's single shift_start_time for every day -- the
-// legacy behavior for departments with no schedule configured at all.
-export function resolveScheduleForDay(scheduleDays, dayOfWeek, orgShiftStartTime) {
-    const row = scheduleDays.get(dayOfWeek);
-    if (row) {
-        if (row.status === 'work') return { startTime: row.start_time, isScheduledDay: true };
-        if (row.status === 'off') return { startTime: null, isScheduledDay: false };
-    }
-    return { startTime: orgShiftStartTime, isScheduledDay: true };
+// For a single check-in event (attendance.js).
+export async function resolveScheduleForShiftDate(userId, dateStr) {
+    const { data: shift, error } = await supabase
+        .from('schedule_shifts')
+        .select('status, start_time')
+        .eq('user_id', userId)
+        .eq('shift_date', dateStr)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    return resolveScheduleFromShift(shift);
 }

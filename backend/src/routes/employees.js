@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { canActOnRole } from '../lib/roles.js';
 import { computeLateness } from '../lib/lateness.js';
-import { loadDepartmentScheduleDays, resolveScheduleForDay } from '../lib/schedule.js';
+import { resolveScheduleFromShift } from '../lib/schedule.js';
 import { getOrgTemplateIds } from '../lib/orgTemplates.js';
 
 const router = Router();
@@ -73,13 +73,6 @@ router.get('/:id/profile', async (req, res) => {
     const periodStartIso = periodStart.toISOString();
     const periodEndIso = periodEnd.toISOString();
 
-    const { data: org, error: orgError } = await supabase
-        .from('organizations')
-        .select('shift_start_time')
-        .eq('id', req.user.organizationId)
-        .single();
-    if (orgError) return res.status(500).json({ error: 'Failed to load organization settings' });
-
     let orgTemplateIds;
     try {
         orgTemplateIds = await getOrgTemplateIds(req.user.organizationId);
@@ -131,11 +124,20 @@ router.get('/:id/profile', async (req, res) => {
         return res.status(500).json({ error: 'Failed to load employee profile data' });
     }
 
-    const scheduleDays = await loadDepartmentScheduleDays(employee.department_id);
+    const { data: shiftsInPeriod, error: shiftsError } = await supabase
+        .from('schedule_shifts')
+        .select('shift_date, status, start_time')
+        .eq('user_id', employee.id)
+        .gte('shift_date', periodStartIso.slice(0, 10))
+        .lt('shift_date', periodEndIso.slice(0, 10));
+    if (shiftsError) return res.status(500).json({ error: 'Failed to load shift schedule' });
+    const shiftByDate = new Map(shiftsInPeriod.map((s) => [s.shift_date, s]));
+
     const checkIns = attendanceRecords.filter((r) => r.type === 'check_in');
     const lateCheckIns = checkIns.filter((r) => {
         const checkInAt = new Date(r.created_at);
-        const schedule = resolveScheduleForDay(scheduleDays, checkInAt.getUTCDay(), org.shift_start_time);
+        const dateStr = checkInAt.toISOString().slice(0, 10);
+        const schedule = resolveScheduleFromShift(shiftByDate.get(dateStr));
         return computeLateness(checkInAt, schedule).isLate;
     });
 
