@@ -312,6 +312,39 @@ h3 {
     margin: 0;
 }
 
+/* --- shift status card --- */
+
+.shift-status-card {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    border-left: 4px solid var(--status-good);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--space-3);
+}
+
+.shift-status-card__value {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.shift-status-card__total {
+    font-size: var(--font-size-sm);
+    font-weight: 400;
+    color: var(--tg-theme-hint-color, #6b7280);
+}
+
+.shift-status-card__label {
+    font-size: var(--font-size-sm);
+    color: var(--tg-theme-hint-color, #6b7280);
+}
+
 /* --- KPI row / stat tiles --- */
 
 .kpi-row {

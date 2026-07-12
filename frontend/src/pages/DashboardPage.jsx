@@ -119,9 +119,21 @@ export default function DashboardPage() {
     if (error) return <p className="error-text">{error}</p>;
     if (!data) return null;
 
+    const onShiftCount = attendance ? attendance.attendance.filter((a) => a.check_in && !a.check_out).length : null;
+    const totalStaff = attendance ? attendance.attendance.length : null;
+
     return (
         <div className="page">
             <h1>Сегодня, {data.date}</h1>
+
+            {onShiftCount !== null && totalStaff > 0 && (
+                <div className="shift-status-card">
+                    <div className="shift-status-card__value">
+                        {onShiftCount} <span className="shift-status-card__total">из {totalStaff}</span>
+                    </div>
+                    <div className="shift-status-card__label">сейчас на смене</div>
+                </div>
+            )}
 
             <div className="kpi-row">
                 {STAT_ORDER.map(([key, label]) => (
