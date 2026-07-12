@@ -231,7 +231,52 @@ async function deleteOrganizationCascade(organizationId) {
         if (error) throw new Error(error.message);
     }
 
+    // A user being deleted can carry history from a DIFFERENT organization
+    // they used to belong to (the platform admin's "reassign owner" flow
+    // moves organization_id but leaves their past checklist/training/
+    // attendance/penalty history in place, tied to whatever org it actually
+    // happened under). None of that gets caught by the organization_id-scoped
+    // deletes above, but it still references this user_id with no cascade --
+    // clear it explicitly or the user delete below fails with an FK error.
     if (userIds.length) {
+        const { data: residualAssignments, error: residualAssignmentsError } = await supabase
+            .from('checklist_assignments')
+            .select('id')
+            .in('assigned_to', userIds);
+        if (residualAssignmentsError) throw new Error(residualAssignmentsError.message);
+        const residualAssignmentIds = residualAssignments.map((a) => a.id);
+        if (residualAssignmentIds.length) {
+            const rA1 = await supabase.from('checklist_assignment_items').delete().in('assignment_id', residualAssignmentIds);
+            if (rA1.error) throw new Error(rA1.error.message);
+            const rA2 = await supabase.from('checklist_assignments').delete().in('id', residualAssignmentIds);
+            if (rA2.error) throw new Error(rA2.error.message);
+        }
+
+        const { data: residualAttempts, error: residualAttemptsError } = await supabase
+            .from('training_test_attempts')
+            .select('id')
+            .in('user_id', userIds);
+        if (residualAttemptsError) throw new Error(residualAttemptsError.message);
+        const residualAttemptIds = residualAttempts.map((a) => a.id);
+        if (residualAttemptIds.length) {
+            const rT1 = await supabase.from('training_test_attempt_answers').delete().in('attempt_id', residualAttemptIds);
+            if (rT1.error) throw new Error(rT1.error.message);
+            const rT2 = await supabase.from('training_test_attempts').delete().in('id', residualAttemptIds);
+            if (rT2.error) throw new Error(rT2.error.message);
+        }
+
+        const rResidualAttendance = await supabase.from('attendance_records').delete().in('user_id', userIds);
+        if (rResidualAttendance.error) throw new Error(rResidualAttendance.error.message);
+
+        const rResidualPenaltiesSubject = await supabase.from('penalties').delete().in('user_id', userIds);
+        if (rResidualPenaltiesSubject.error) throw new Error(rResidualPenaltiesSubject.error.message);
+
+        // created_by is nullable -- a penalty someone else (in another org)
+        // still owns just loses the "who issued it" attribution instead of
+        // being deleted out from under that org.
+        const rResidualPenaltiesCreator = await supabase.from('penalties').update({ created_by: null }).in('created_by', userIds);
+        if (rResidualPenaltiesCreator.error) throw new Error(rResidualPenaltiesCreator.error.message);
+
         const rShifts = await supabase.from('schedule_shifts').delete().in('user_id', userIds);
         if (rShifts.error) throw new Error(rShifts.error.message);
     }
