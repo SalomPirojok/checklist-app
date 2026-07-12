@@ -42,6 +42,22 @@ function validateShiftInput(body) {
     return null;
 }
 
+// Any authenticated user can see their own shift for today -- unlike the
+// rest of this router, this isn't gated by canManageSchedule since it only
+// ever exposes the caller's own row (used next to the check-in button so an
+// employee knows what time they're expected).
+router.get('/my-shift-today', async (req, res) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const { data: shift, error } = await supabase
+        .from('schedule_shifts')
+        .select('status, start_time, end_time')
+        .eq('user_id', req.user.id)
+        .eq('shift_date', todayStr)
+        .maybeSingle();
+    if (error) return res.status(500).json({ error: 'Failed to load shift' });
+    res.json({ shift });
+});
+
 router.get('/shifts', async (req, res) => {
     if (!canManageSchedule(req)) {
         return res.status(403).json({ error: 'Not allowed to view the shift schedule' });

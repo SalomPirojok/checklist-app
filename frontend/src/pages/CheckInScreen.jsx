@@ -1,13 +1,31 @@
-import { useState } from 'react';
-import { useApiUpload } from '../api/useApiClient';
+import { useEffect, useState } from 'react';
+import { useApiClient, useApiUpload } from '../api/useApiClient';
 import CameraCapture from '../components/CameraCapture';
 import { hapticError, hapticSuccess } from '../lib/haptics';
 
+function formatTimeShort(time) {
+    return time ? time.slice(0, 5) : null;
+}
+
 export default function CheckInScreen({ onCheckedIn }) {
+    const api = useApiClient();
     const upload = useApiUpload();
     const [cameraOpen, setCameraOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState(null);
+    const [todayShift, setTodayShift] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        api('/api/schedule/my-shift-today')
+            .then((res) => {
+                if (!cancelled) setTodayShift(res.shift);
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, [api]);
 
     async function handleCapture(blob) {
         setCameraOpen(false);
@@ -33,6 +51,14 @@ export default function CheckInScreen({ onCheckedIn }) {
             <div className="card">
                 <h1>Отметить приход</h1>
                 <p className="hint">Сначала отметьте приход — сделайте селфи, чтобы получить доступ к чек-листам.</p>
+
+                {todayShift?.status === 'work' && todayShift.start_time && (
+                    <p className="hint">
+                        Ваше время сегодня: {formatTimeShort(todayShift.start_time)}
+                        {todayShift.end_time ? ` – ${formatTimeShort(todayShift.end_time)}` : ''}
+                    </p>
+                )}
+                {todayShift?.status === 'off' && <p className="hint">Сегодня у вас выходной по графику.</p>}
 
                 <button
                     type="button"
