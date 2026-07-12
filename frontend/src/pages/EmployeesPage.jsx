@@ -125,6 +125,15 @@ export default function EmployeesPage() {
         }
     }
 
+    async function handleActivate(employee) {
+        try {
+            await api(`/api/employees/${employee.id}`, { method: 'PATCH', body: { is_active: true } });
+            await load();
+        } catch (err) {
+            setListError(err.message);
+        }
+    }
+
     async function handleToggleTraining(employee) {
         try {
             await api(`/api/employees/${employee.id}`, {
@@ -219,12 +228,16 @@ export default function EmployeesPage() {
                                         <button className="btn btn--ghost" onClick={() => openEditForm(employee)}>
                                             Изменить
                                         </button>
-                                        {employee.is_active && (
+                                        {employee.is_active ? (
                                             <button
                                                 className="btn btn--ghost btn--danger"
                                                 onClick={() => handleDeactivate(employee)}
                                             >
                                                 Деактивировать
+                                            </button>
+                                        ) : (
+                                            <button className="btn btn--ghost" onClick={() => handleActivate(employee)}>
+                                                Активировать
                                             </button>
                                         )}
                                     </div>
