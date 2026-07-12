@@ -137,6 +137,64 @@ function EditOwnerModal({ org, onSave, onClose }) {
     );
 }
 
+// Telegram's in-app browser doesn't reliably support window.prompt() (unlike
+// confirm(), which is used elsewhere in this app) -- type-to-confirm needs a
+// real input field in a modal instead.
+function DeleteOrgModal({ org, onConfirm, onClose }) {
+    const [typedName, setTypedName] = useState('');
+    const [deleting, setDeleting] = useState(false);
+    const [error, setError] = useState(null);
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        if (typedName !== org.name) {
+            setError('Название не совпадает.');
+            return;
+        }
+        setError(null);
+        setDeleting(true);
+        try {
+            await onConfirm(typedName);
+            onClose();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setDeleting(false);
+        }
+    }
+
+    return (
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <h2>Удалить организацию навсегда</h2>
+                <p className="error-text">
+                    Это необратимо удалит «{org.name}» и ВСЕ её данные: сотрудников, чек-листы, историю, штрафы, обучение,
+                    графики.
+                </p>
+                <form onSubmit={handleSubmit} className="form">
+                    <label className="field">
+                        <span>
+                            Введите точное название организации «{org.name}», чтобы подтвердить
+                        </span>
+                        <input type="text" required value={typedName} onChange={(e) => setTypedName(e.target.value)} autoFocus />
+                    </label>
+
+                    {error && <p className="error-text">{error}</p>}
+
+                    <div className="form-actions">
+                        <button type="button" className="btn btn--ghost" onClick={onClose}>
+                            Отмена
+                        </button>
+                        <button type="submit" className="btn" disabled={deleting || typedName !== org.name}>
+                            {deleting ? 'Удаление...' : 'Удалить навсегда'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
 export default function PlatformAdminPage() {
     const api = useApiClient();
     const [organizations, setOrganizations] = useState([]);
@@ -144,6 +202,7 @@ export default function PlatformAdminPage() {
     const [error, setError] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOwnerOrg, setEditingOwnerOrg] = useState(null);
+    const [deletingOrg, setDeletingOrg] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
 
     async function load() {
@@ -191,24 +250,12 @@ export default function PlatformAdminPage() {
         await load();
     }
 
-    async function handleDelete(org) {
-        const typed = prompt(
-            `Это необратимо удалит организацию «${org.name}» и ВСЕ её данные (сотрудников, чек-листы, историю, штрафы, обучение).\n\nЧтобы подтвердить, введите точное название организации:`
-        );
-        if (typed === null) return;
-        if (typed !== org.name) {
-            setError('Название не совпадает — удаление отменено.');
-            return;
-        }
-        try {
-            await api(`/api/platform-admin/organizations/${org.id}`, {
-                method: 'DELETE',
-                body: { confirm_name: typed },
-            });
-            await load();
-        } catch (err) {
-            setError(err.message);
-        }
+    async function handleDelete(org, typedName) {
+        await api(`/api/platform-admin/organizations/${org.id}`, {
+            method: 'DELETE',
+            body: { confirm_name: typedName },
+        });
+        await load();
     }
 
     return (
@@ -259,7 +306,7 @@ export default function PlatformAdminPage() {
                                             Исправить владельца
                                         </button>
                                     )}
-                                    <button type="button" className="btn btn--ghost btn--danger" onClick={() => handleDelete(org)}>
+                                    <button type="button" className="btn btn--ghost btn--danger" onClick={() => setDeletingOrg(org)}>
                                         Удалить навсегда
                                     </button>
                                 </div>
@@ -275,6 +322,13 @@ export default function PlatformAdminPage() {
                     org={editingOwnerOrg}
                     onSave={(payload) => handleSaveOwner(editingOwnerOrg, payload)}
                     onClose={() => setEditingOwnerOrg(null)}
+                />
+            )}
+            {deletingOrg && (
+                <DeleteOrgModal
+                    org={deletingOrg}
+                    onConfirm={(typedName) => handleDelete(deletingOrg, typedName)}
+                    onClose={() => setDeletingOrg(null)}
                 />
             )}
         </div>
