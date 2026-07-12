@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useApiUpload } from '../api/useApiClient';
+import CameraCapture from './CameraCapture';
 import { hapticError, hapticSuccess } from '../lib/haptics';
 
 function formatTime(isoString) {
@@ -8,21 +9,18 @@ function formatTime(isoString) {
 
 export default function AttendanceBar({ attendance, onCheckedOut }) {
     const upload = useApiUpload();
-    const fileInputRef = useRef(null);
+    const [cameraOpen, setCameraOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState(null);
 
-    async function handleFileChange(e) {
-        const file = e.target.files?.[0];
-        e.target.value = '';
-        if (!file) return;
-
+    async function handleCapture(blob) {
+        setCameraOpen(false);
         setUploading(true);
         setError(null);
         try {
             const formData = new FormData();
             formData.append('type', 'check_out');
-            formData.append('photo', file);
+            formData.append('photo', blob, 'check-out.jpg');
             await upload('/api/attendance', formData);
             hapticSuccess();
             onCheckedOut();
@@ -40,26 +38,15 @@ export default function AttendanceBar({ attendance, onCheckedOut }) {
             {attendance.check_out ? (
                 <span className="hint">Ушли: {formatTime(attendance.check_out.created_at)}</span>
             ) : (
-                <>
-                    <button
-                        type="button"
-                        className="btn btn--ghost"
-                        disabled={uploading}
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        {uploading ? 'Загрузка...' : 'Отметить уход'}
-                    </button>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="user"
-                        hidden
-                        onChange={handleFileChange}
-                    />
-                </>
+                <button type="button" className="btn btn--ghost" disabled={uploading} onClick={() => setCameraOpen(true)}>
+                    {uploading ? 'Загрузка...' : 'Отметить уход'}
+                </button>
             )}
             {error && <p className="error-text">{error}</p>}
+
+            {cameraOpen && (
+                <CameraCapture facingMode="user" onCapture={handleCapture} onClose={() => setCameraOpen(false)} />
+            )}
         </div>
     );
 }

@@ -21,7 +21,7 @@ export default function EmployeeChecklistDetailPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [signatureSaving, setSignatureSaving] = useState(false);
-    const [lightboxUrl, setLightboxUrl] = useState(null);
+    const [lightbox, setLightbox] = useState(null);
 
     async function load() {
         try {
@@ -51,7 +51,7 @@ export default function EmployeeChecklistDetailPage() {
     }
 
     async function handleToggleDone(item, done) {
-        if (done && item.template_item.requires_photo && !item.photo_url) return;
+        if (done && item.template_item.requires_photo && !(item.photo_urls || []).length) return;
         try {
             const res = await api(`/api/assignments/${id}/items/${item.id}`, {
                 method: 'PATCH',
@@ -63,16 +63,19 @@ export default function EmployeeChecklistDetailPage() {
         }
     }
 
-    async function handleUploadPhoto(item, file) {
+    async function handleUploadPhoto(item, blob) {
         const formData = new FormData();
-        formData.append('photo', file);
-        const { photo_url } = await upload(`/api/assignments/${id}/items/${item.id}/photo`, formData);
+        formData.append('photo', blob, 'item-photo.jpg');
+        const { item: updatedItem } = await upload(`/api/assignments/${id}/items/${item.id}/photo`, formData);
+        applyUpdate(item.id, updatedItem, null);
+    }
 
-        const res = await api(`/api/assignments/${id}/items/${item.id}`, {
-            method: 'PATCH',
-            body: { is_done: true, photo_url },
+    async function handleDeletePhoto(item, photoUrl) {
+        const res = await api(`/api/assignments/${id}/items/${item.id}/photo`, {
+            method: 'DELETE',
+            body: { photo_url: photoUrl },
         });
-        applyUpdate(item.id, res.item, res.assignment);
+        applyUpdate(item.id, res.item, null);
     }
 
     async function handleToggleSubCheckbox(item, subId, checked) {
@@ -141,8 +144,10 @@ export default function EmployeeChecklistDetailPage() {
             readOnly={readOnly}
             onToggleDone={handleToggleDone}
             onUploadPhoto={handleUploadPhoto}
+            onDeletePhoto={handleDeletePhoto}
             onSaveComment={handleSaveComment}
             onToggleSubCheckbox={handleToggleSubCheckbox}
+            onOpenPhotos={(photos, index) => setLightbox({ photos, index })}
         />
     );
 
@@ -194,7 +199,11 @@ export default function EmployeeChecklistDetailPage() {
             <section className="signature-section">
                 <h2>Подпись</h2>
                 {assignment.signature_url ? (
-                    <button type="button" className="clickable-photo" onClick={() => setLightboxUrl(assignment.signature_url)}>
+                    <button
+                        type="button"
+                        className="clickable-photo"
+                        onClick={() => setLightbox({ photos: [assignment.signature_url], index: 0 })}
+                    >
                         <img src={assignment.signature_url} alt="Подпись" className="signature-pad__preview" />
                     </button>
                 ) : allItemsDone ? (
@@ -204,7 +213,9 @@ export default function EmployeeChecklistDetailPage() {
                 )}
             </section>
 
-            {lightboxUrl && <PhotoLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
+            {lightbox && (
+                <PhotoLightbox photos={lightbox.photos} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
+            )}
         </div>
     );
 }

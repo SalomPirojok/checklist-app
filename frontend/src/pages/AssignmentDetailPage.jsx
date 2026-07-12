@@ -6,7 +6,8 @@ import CategorySection from '../components/CategorySection';
 import PhotoLightbox from '../components/PhotoLightbox';
 import { buildDisplaySegments } from '../utils/groupByCategory';
 
-function ItemRow({ item, onOpenPhoto }) {
+function ItemRow({ item, onOpenPhotos }) {
+    const photoUrls = item.photo_urls || [];
     return (
         <li className={`checklist-item${item.is_done ? ' checklist-item--done' : ''}`}>
             <div className="checklist-item__main">
@@ -31,14 +32,21 @@ function ItemRow({ item, onOpenPhoto }) {
                         <div className="hint">Выполнено: {new Date(item.done_at).toLocaleString('ru-RU')}</div>
                     )}
                     {item.comment && <div className="hint">Комментарий: {item.comment}</div>}
-                    {item.photo_url && (
-                        <div className="checklist-item__photo">
-                            <button type="button" className="clickable-photo" onClick={() => onOpenPhoto(item.photo_url)}>
-                                <img src={item.photo_url} alt="" className="checklist-item__thumb" />
-                            </button>
+                    {photoUrls.length > 0 && (
+                        <div className="checklist-item__photo-grid">
+                            {photoUrls.map((url, index) => (
+                                <button
+                                    key={url}
+                                    type="button"
+                                    className="clickable-photo"
+                                    onClick={() => onOpenPhotos(photoUrls, index)}
+                                >
+                                    <img src={url} alt="" className="checklist-item__thumb" />
+                                </button>
+                            ))}
                         </div>
                     )}
-                    {item.template_item.requires_photo && !item.photo_url && (
+                    {item.template_item.requires_photo && photoUrls.length === 0 && (
                         <div className="hint">Фото ещё не загружено</div>
                     )}
                 </div>
@@ -56,7 +64,7 @@ export default function AssignmentDetailPage() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [lightboxUrl, setLightboxUrl] = useState(null);
+    const [lightbox, setLightbox] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -120,25 +128,30 @@ export default function AssignmentDetailPage() {
             )}
 
             <ul className="checklist-items">
-                {segments.map((segment, index) =>
-                    segment.type === 'item' ? (
-                        <ItemRow key={segment.item.id} item={segment.item} onOpenPhoto={setLightboxUrl} />
+                {segments.map((segment, index) => {
+                    const onOpenPhotos = (photos, photoIndex) => setLightbox({ photos, index: photoIndex });
+                    return segment.type === 'item' ? (
+                        <ItemRow key={segment.item.id} item={segment.item} onOpenPhotos={onOpenPhotos} />
                     ) : (
                         <CategorySection
                             key={`cat-${index}`}
                             name={segment.name}
                             items={segment.items}
                             doneCount={segment.items.filter((i) => i.is_done).length}
-                            renderItem={(item) => <ItemRow key={item.id} item={item} onOpenPhoto={setLightboxUrl} />}
+                            renderItem={(item) => <ItemRow key={item.id} item={item} onOpenPhotos={onOpenPhotos} />}
                         />
-                    )
-                )}
+                    );
+                })}
             </ul>
 
             <section className="signature-section">
                 <h2>Подпись сотрудника</h2>
                 {assignment.signature_url ? (
-                    <button type="button" className="clickable-photo" onClick={() => setLightboxUrl(assignment.signature_url)}>
+                    <button
+                        type="button"
+                        className="clickable-photo"
+                        onClick={() => setLightbox({ photos: [assignment.signature_url], index: 0 })}
+                    >
                         <img src={assignment.signature_url} alt="Подпись" className="signature-pad__preview" />
                     </button>
                 ) : (
@@ -146,7 +159,9 @@ export default function AssignmentDetailPage() {
                 )}
             </section>
 
-            {lightboxUrl && <PhotoLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
+            {lightbox && (
+                <PhotoLightbox photos={lightbox.photos} startIndex={lightbox.index} onClose={() => setLightbox(null)} />
+            )}
         </div>
     );
 }

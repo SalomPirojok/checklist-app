@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
     uploadAssignmentItemPhoto,
-    verifyPhotoBelongsToItem,
     uploadSignaturePhoto,
     verifySignatureBelongsToAssignment,
 } from '../lib/storage.js';
@@ -431,25 +430,81 @@ router.post('/:id/items/:itemId/photo', upload.single('photo'), async (req, res)
 
     const { data: item, error: itemError } = await supabase
         .from('checklist_assignment_items')
-        .select('id')
+        .select('id, is_done, photo_urls')
         .eq('id', req.params.itemId)
         .eq('assignment_id', assignment.id)
         .maybeSingle();
     if (itemError) return res.status(500).json({ error: 'Failed to fetch item' });
     if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (item.is_done) {
+        return res.status(400).json({ error: 'Item is already completed — cancel it to change photos' });
+    }
 
+    let photoUrl;
     try {
-        const photoUrl = await uploadAssignmentItemPhoto({
+        photoUrl = await uploadAssignmentItemPhoto({
             assignmentId: assignment.id,
             itemId: item.id,
             buffer: req.file.buffer,
             contentType: req.file.mimetype,
             extension: MIME_EXTENSIONS[req.file.mimetype],
         });
-        res.status(201).json({ photo_url: photoUrl });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        return res.status(500).json({ error: err.message });
     }
+
+    const { data: updatedItem, error: updateError } = await supabase
+        .from('checklist_assignment_items')
+        .update({ photo_urls: [...(item.photo_urls || []), photoUrl] })
+        .eq('id', item.id)
+        .select()
+        .single();
+    if (updateError) return res.status(500).json({ error: 'Failed to save photo' });
+
+    res.status(201).json({ item: updatedItem });
+});
+
+router.delete('/:id/items/:itemId/photo', async (req, res) => {
+    let assignment;
+    try {
+        assignment = await loadAssignmentInOrg(req.params.id, req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to fetch assignment' });
+    }
+    if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
+
+    const isOwnerOrManager = req.user.role === 'owner' || req.user.role === 'manager';
+    if (!isOwnerOrManager && assignment.assigned_to !== req.user.id) {
+        return res.status(403).json({ error: 'Not allowed to update this assignment' });
+    }
+    if (!isOwnerOrManager && (await hasCheckedOutToday(req.user.id))) {
+        return res.status(403).json({ error: 'Смена завершена — заполнение чек-листов недоступно до следующего прихода' });
+    }
+
+    const { photo_url } = req.body || {};
+    if (!photo_url) return res.status(400).json({ error: 'photo_url is required' });
+
+    const { data: item, error: itemError } = await supabase
+        .from('checklist_assignment_items')
+        .select('id, is_done, photo_urls')
+        .eq('id', req.params.itemId)
+        .eq('assignment_id', assignment.id)
+        .maybeSingle();
+    if (itemError) return res.status(500).json({ error: 'Failed to fetch item' });
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (item.is_done) {
+        return res.status(400).json({ error: 'Item is already completed — cancel it to change photos' });
+    }
+
+    const { data: updatedItem, error: updateError } = await supabase
+        .from('checklist_assignment_items')
+        .update({ photo_urls: (item.photo_urls || []).filter((url) => url !== photo_url) })
+        .eq('id', item.id)
+        .select()
+        .single();
+    if (updateError) return res.status(500).json({ error: 'Failed to delete photo' });
+
+    res.json({ item: updatedItem });
 });
 
 router.patch('/:id/items/:itemId', async (req, res) => {
@@ -478,10 +533,9 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     if (itemError) return res.status(500).json({ error: 'Failed to fetch item' });
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
-    const { is_done, photo_url, comment, sub_checkbox_results } = req.body || {};
+    const { is_done, comment, sub_checkbox_results } = req.body || {};
     const updates = {};
     if (comment !== undefined) updates.comment = comment;
-    if (photo_url !== undefined) updates.photo_url = photo_url;
 
     if (sub_checkbox_results !== undefined) {
         if (!Array.isArray(item.sub_checkbox_results)) {
@@ -500,19 +554,12 @@ router.patch('/:id/items/:itemId', async (req, res) => {
 
     if (is_done !== undefined) {
         const willBeDone = !!is_done;
-        const finalPhotoUrl = photo_url !== undefined ? photo_url : item.photo_url;
         const finalSubResults = sub_checkbox_results !== undefined ? sub_checkbox_results : item.sub_checkbox_results;
         if (willBeDone && !allSubCheckboxesChecked(finalSubResults)) {
             return res.status(400).json({ error: 'All sub-items must be checked before this item can be marked done' });
         }
-        if (willBeDone && item.template_item.requires_photo) {
-            if (!finalPhotoUrl) {
-                return res.status(400).json({ error: 'This item requires a photo before it can be marked done' });
-            }
-            const verified = await verifyPhotoBelongsToItem(finalPhotoUrl, assignment.id, item.id);
-            if (!verified) {
-                return res.status(400).json({ error: 'Photo could not be verified — please upload it again' });
-            }
+        if (willBeDone && item.template_item.requires_photo && !(item.photo_urls || []).length) {
+            return res.status(400).json({ error: 'This item requires a photo before it can be marked done' });
         }
         updates.is_done = willBeDone;
         updates.done_at = willBeDone ? new Date().toISOString() : null;
@@ -577,7 +624,7 @@ router.post('/:id/reset', async (req, res) => {
 
     const { error: itemsError } = await supabase
         .from('checklist_assignment_items')
-        .update({ is_done: false, photo_url: null, comment: null, done_at: null })
+        .update({ is_done: false, photo_urls: [], comment: null, done_at: null })
         .eq('assignment_id', assignment.id);
     if (itemsError) return res.status(500).json({ error: 'Failed to reset items' });
 

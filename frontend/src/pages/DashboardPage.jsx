@@ -186,7 +186,7 @@ export default function DashboardPage() {
                 )}
             </section>
 
-            {lightboxUrl && <PhotoLightbox src={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
+            {lightboxUrl && <PhotoLightbox photos={[lightboxUrl]} onClose={() => setLightboxUrl(null)} />}
         </div>
     );
 }

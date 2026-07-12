@@ -1,24 +1,22 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useApiUpload } from '../api/useApiClient';
+import CameraCapture from '../components/CameraCapture';
 import { hapticError, hapticSuccess } from '../lib/haptics';
 
 export default function CheckInScreen({ onCheckedIn }) {
     const upload = useApiUpload();
-    const fileInputRef = useRef(null);
+    const [cameraOpen, setCameraOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState(null);
 
-    async function handleFileChange(e) {
-        const file = e.target.files?.[0];
-        e.target.value = '';
-        if (!file) return;
-
+    async function handleCapture(blob) {
+        setCameraOpen(false);
         setUploading(true);
         setError(null);
         try {
             const formData = new FormData();
             formData.append('type', 'check_in');
-            formData.append('photo', file);
+            formData.append('photo', blob, 'check-in.jpg');
             await upload('/api/attendance', formData);
             hapticSuccess();
             onCheckedIn();
@@ -40,21 +38,17 @@ export default function CheckInScreen({ onCheckedIn }) {
                     type="button"
                     className="btn btn--large btn--block"
                     disabled={uploading}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => setCameraOpen(true)}
                 >
                     {uploading ? 'Загрузка...' : '📸 Сделать селфи'}
                 </button>
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="user"
-                    hidden
-                    onChange={handleFileChange}
-                />
 
                 {error && <p className="error-text">{error}</p>}
             </div>
+
+            {cameraOpen && (
+                <CameraCapture facingMode="user" onCapture={handleCapture} onClose={() => setCameraOpen(false)} />
+            )}
         </div>
     );
 }

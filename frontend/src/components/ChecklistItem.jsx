@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import CameraCapture from './CameraCapture';
 import { hapticError, hapticSelect, hapticTap } from '../lib/haptics';
 
-export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSaveComment, onToggleSubCheckbox, readOnly }) {
-    const fileInputRef = useRef(null);
+export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onDeletePhoto, onSaveComment, onToggleSubCheckbox, onOpenPhotos, readOnly }) {
+    const [cameraOpen, setCameraOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState(null);
     const [comment, setComment] = useState(item.comment || '');
@@ -12,22 +13,31 @@ export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSav
     const isDone = item.is_done;
     const hasSubCheckboxes = Array.isArray(subCheckboxes) && subCheckboxes.length > 0;
     const subsComplete = !hasSubCheckboxes || (item.sub_checkbox_results || []).every((r) => r.checked);
+    const photoUrls = item.photo_urls || [];
 
-    async function handleFileChange(e) {
-        const file = e.target.files?.[0];
-        e.target.value = '';
-        if (!file) return;
-
+    async function handleCapture(blob) {
+        setCameraOpen(false);
         setUploading(true);
         setUploadError(null);
         try {
-            await onUploadPhoto(item, file);
+            await onUploadPhoto(item, blob);
             hapticTap();
         } catch (err) {
             setUploadError(err.message);
             hapticError();
         } finally {
             setUploading(false);
+        }
+    }
+
+    async function handleDeletePhoto(e, url) {
+        e.stopPropagation();
+        try {
+            await onDeletePhoto(item, url);
+            hapticTap();
+        } catch (err) {
+            setUploadError(err.message);
+            hapticError();
         }
     }
 
@@ -59,17 +69,15 @@ export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSav
     return (
         <li className={`checklist-item${isDone ? ' checklist-item--done' : ''}`}>
             <div className="checklist-item__main">
-                {!requiresPhoto && (
-                    <button
-                        type="button"
-                        className="checklist-item__check"
-                        disabled={readOnly || (!isDone && !subsComplete)}
-                        onClick={() => handleToggleDone(!isDone)}
-                        aria-label={isDone ? 'Отменить выполнение' : 'Отметить выполненным'}
-                    >
-                        {isDone ? '✓' : ''}
-                    </button>
-                )}
+                <button
+                    type="button"
+                    className="checklist-item__check"
+                    disabled={readOnly || (!isDone && (!subsComplete || (requiresPhoto && photoUrls.length === 0)))}
+                    onClick={() => handleToggleDone(!isDone)}
+                    aria-label={isDone ? 'Отменить выполнение' : 'Отметить выполненным'}
+                >
+                    {isDone ? '✓' : ''}
+                </button>
                 <div className="checklist-item__body">
                     <div className="checklist-item__title">{title}</div>
                     {description && <div className="hint">{description}</div>}
@@ -101,32 +109,39 @@ export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSav
 
                     {requiresPhoto && (
                         <div className="checklist-item__photo">
-                            {item.photo_url && (
-                                <img src={item.photo_url} alt="" className="checklist-item__thumb" />
+                            {photoUrls.length > 0 && (
+                                <div className="checklist-item__photo-grid">
+                                    {photoUrls.map((url, index) => (
+                                        <div className="checklist-item__photo-thumb-wrap" key={url}>
+                                            <button
+                                                type="button"
+                                                className="clickable-photo"
+                                                onClick={() => onOpenPhotos(photoUrls, index)}
+                                            >
+                                                <img src={url} alt="" className="checklist-item__thumb" />
+                                            </button>
+                                            {!readOnly && !isDone && (
+                                                <button
+                                                    type="button"
+                                                    className="checklist-item__photo-remove"
+                                                    aria-label="Удалить фото"
+                                                    onClick={(e) => handleDeletePhoto(e, url)}
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             )}
-                            {!readOnly && (
-                                <>
-                                    <button
-                                        type="button"
-                                        className="btn btn--ghost"
-                                        disabled={uploading || !subsComplete}
-                                        onClick={() => fileInputRef.current?.click()}
-                                    >
-                                        {uploading ? 'Загрузка...' : item.photo_url ? 'Заменить фото' : '📷 Добавить фото'}
-                                    </button>
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        capture="environment"
-                                        hidden
-                                        onChange={handleFileChange}
-                                    />
-                                </>
-                            )}
-                            {isDone && !readOnly && (
-                                <button type="button" className="btn btn--ghost" onClick={() => handleToggleDone(false)}>
-                                    Отменить
+                            {!readOnly && !isDone && (
+                                <button
+                                    type="button"
+                                    className="btn btn--ghost"
+                                    disabled={uploading || !subsComplete}
+                                    onClick={() => setCameraOpen(true)}
+                                >
+                                    {uploading ? 'Загрузка...' : '📷 Добавить фото'}
                                 </button>
                             )}
                             {uploadError && <p className="error-text">{uploadError}</p>}
@@ -145,6 +160,10 @@ export default function ChecklistItem({ item, onToggleDone, onUploadPhoto, onSav
                     {readOnly && item.comment && <div className="hint">Комментарий: {item.comment}</div>}
                 </div>
             </div>
+
+            {cameraOpen && (
+                <CameraCapture facingMode="environment" onCapture={handleCapture} onClose={() => setCameraOpen(false)} />
+            )}
         </li>
     );
 }

@@ -84,19 +84,6 @@ export async function uploadAssignmentItemPhoto({ assignmentId, itemId, buffer, 
     return uploadPhoto(CHECKLIST_BUCKET, path, buffer, contentType);
 }
 
-export async function verifyPhotoBelongsToItem(photoUrl, assignmentId, itemId) {
-    const objectPath = extractBucketRelativePath(photoUrl, CHECKLIST_BUCKET);
-    if (!objectPath) return false;
-
-    const expectedFolder = `${assignmentId}/`;
-    if (!objectPath.startsWith(expectedFolder)) return false;
-
-    const filename = objectPath.slice(expectedFolder.length);
-    if (!filename.startsWith(`${itemId}-`)) return false;
-
-    return photoExistsAtPath(CHECKLIST_BUCKET, assignmentId, filename);
-}
-
 export async function uploadAttendancePhoto({ userId, buffer, contentType, extension }) {
     const path = `${userId}/${Date.now()}.${extension}`;
     return uploadPhoto(ATTENDANCE_BUCKET, path, buffer, contentType);

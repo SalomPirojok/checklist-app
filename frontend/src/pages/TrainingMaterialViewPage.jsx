@@ -153,7 +153,7 @@ export default function TrainingMaterialViewPage() {
                 </div>
             )}
 
-            {lightboxOpen && <PhotoLightbox src={material.file_url} onClose={() => setLightboxOpen(false)} />}
+            {lightboxOpen && <PhotoLightbox photos={[material.file_url]} onClose={() => setLightboxOpen(false)} />}
         </div>
     );
 }
