@@ -9,7 +9,6 @@ export default function PenaltySettingsPage() {
     const [enabled, setEnabled] = useState(false);
     const [thresholdMinutes, setThresholdMinutes] = useState(15);
     const [penaltyAmount, setPenaltyAmount] = useState(0);
-    const [shiftStartTime, setShiftStartTime] = useState('09:00');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
@@ -21,7 +20,6 @@ export default function PenaltySettingsPage() {
                 setEnabled(res.settings.auto_penalty_enabled);
                 setThresholdMinutes(res.settings.late_threshold_minutes);
                 setPenaltyAmount(Number(res.settings.late_penalty_amount));
-                setShiftStartTime((res.settings.shift_start_time || '09:00').slice(0, 5));
             })
             .catch((err) => setError(err.message))
             .finally(() => setLoading(false));
@@ -39,7 +37,6 @@ export default function PenaltySettingsPage() {
                     auto_penalty_enabled: enabled,
                     late_threshold_minutes: Number(thresholdMinutes),
                     late_penalty_amount: Number(penaltyAmount),
-                    shift_start_time: shiftStartTime,
                 },
             });
             setSaved(true);
@@ -68,11 +65,6 @@ export default function PenaltySettingsPage() {
                 </label>
 
                 <label className="field">
-                    <span>Время начала смены</span>
-                    <input type="time" value={shiftStartTime} onChange={(e) => setShiftStartTime(e.target.value)} required />
-                </label>
-
-                <label className="field">
                     <span>Порог опоздания (минут)</span>
                     <input
                         type="number"
@@ -81,7 +73,10 @@ export default function PenaltySettingsPage() {
                         onChange={(e) => setThresholdMinutes(e.target.value)}
                         required
                     />
-                    <span className="hint">Штраф начисляется, если приход позже времени начала смены + этот порог.</span>
+                    <span className="hint">
+                        Штраф начисляется, если приход позже личного времени начала смены сотрудника (см. «График») плюс
+                        этот порог. Если на сегодня график не задан, штраф не начисляется.
+                    </span>
                 </label>
 
                 <label className="field">

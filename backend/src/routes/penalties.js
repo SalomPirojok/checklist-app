@@ -7,15 +7,13 @@ const router = Router();
 
 router.use(requireAuth, requireRole('owner', 'manager'));
 
-const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
-
 // Registered before '/:id'-shaped routes would be, so "settings" can never be
 // swallowed as an id -- there is no GET/PATCH '/:id' in this router, but kept
 // consistent with the pattern used elsewhere in this codebase (training.js).
 router.get('/settings', async (req, res) => {
     const { data, error } = await supabase
         .from('organizations')
-        .select('late_threshold_minutes, late_penalty_amount, auto_penalty_enabled, shift_start_time')
+        .select('late_threshold_minutes, late_penalty_amount, auto_penalty_enabled')
         .eq('id', req.user.organizationId)
         .single();
     if (error) return res.status(500).json({ error: 'Failed to load settings' });
@@ -23,7 +21,7 @@ router.get('/settings', async (req, res) => {
 });
 
 router.patch('/settings', async (req, res) => {
-    const { late_threshold_minutes, late_penalty_amount, auto_penalty_enabled, shift_start_time } = req.body || {};
+    const { late_threshold_minutes, late_penalty_amount, auto_penalty_enabled } = req.body || {};
     const updates = {};
 
     if (late_threshold_minutes !== undefined) {
@@ -40,12 +38,6 @@ router.patch('/settings', async (req, res) => {
         updates.late_penalty_amount = amount;
     }
     if (auto_penalty_enabled !== undefined) updates.auto_penalty_enabled = !!auto_penalty_enabled;
-    if (shift_start_time !== undefined) {
-        if (!TIME_PATTERN.test(shift_start_time)) {
-            return res.status(400).json({ error: 'shift_start_time must be in HH:MM format' });
-        }
-        updates.shift_start_time = shift_start_time;
-    }
 
     if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: 'No valid fields to update' });
@@ -55,7 +47,7 @@ router.patch('/settings', async (req, res) => {
         .from('organizations')
         .update(updates)
         .eq('id', req.user.organizationId)
-        .select('late_threshold_minutes, late_penalty_amount, auto_penalty_enabled, shift_start_time')
+        .select('late_threshold_minutes, late_penalty_amount, auto_penalty_enabled')
         .single();
     if (error) return res.status(500).json({ error: 'Failed to update settings' });
     res.json({ settings: data });
