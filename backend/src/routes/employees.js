@@ -97,6 +97,7 @@ router.get('/:id/profile', async (req, res) => {
             .from('attendance_records')
             .select('*')
             .eq('user_id', employee.id)
+            .eq('organization_id', req.user.organizationId)
             .gte('created_at', periodStartIso)
             .lt('created_at', periodEndIso)
             .order('created_at', { ascending: false }),
@@ -114,6 +115,7 @@ router.get('/:id/profile', async (req, res) => {
             .from('penalties')
             .select('*')
             .eq('user_id', employee.id)
+            .eq('organization_id', req.user.organizationId)
             .gte('created_at', periodStartIso)
             .lt('created_at', periodEndIso)
             .order('created_at', { ascending: false }),
@@ -121,6 +123,7 @@ router.get('/:id/profile', async (req, res) => {
             .from('training_test_attempts')
             .select('test_id, score_percent, passed, created_at')
             .eq('user_id', employee.id)
+            .eq('organization_id', req.user.organizationId)
             .gte('created_at', periodStartIso)
             .lt('created_at', periodEndIso),
     ]);
