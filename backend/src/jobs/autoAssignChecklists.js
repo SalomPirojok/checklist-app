@@ -58,7 +58,8 @@ export async function runAutoAssignChecklists() {
             const { data: templateItems, error: itemsError } = await supabase
                 .from('checklist_template_items')
                 .select('id, sub_checkboxes')
-                .eq('template_id', template.id);
+                .eq('template_id', template.id)
+                .eq('is_removed', false);
             if (itemsError) throw new Error(itemsError.message);
             if (!templateItems.length) continue; // nothing to hand out
 

@@ -193,7 +193,8 @@ router.post('/', async (req, res) => {
     const { data: templateItems, error: itemsError } = await supabase
         .from('checklist_template_items')
         .select('id, sub_checkboxes')
-        .eq('template_id', template_id);
+        .eq('template_id', template_id)
+        .eq('is_removed', false);
     if (itemsError) return res.status(500).json({ error: 'Failed to load template items' });
     if (templateItems.length === 0) {
         return res.status(400).json({ error: 'Template has no items to assign' });

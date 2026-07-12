@@ -123,6 +123,7 @@ router.get('/:id', async (req, res) => {
         .from('checklist_template_items')
         .select('*')
         .eq('template_id', template.id)
+        .eq('is_removed', false)
         .order('order_index', { ascending: true });
 
     if (itemsError) return res.status(500).json({ error: 'Failed to fetch template items' });
@@ -247,8 +248,38 @@ router.patch('/:id', async (req, res) => {
         .single();
 
     if (error) return res.status(500).json({ error: 'Failed to update template' });
+
+    if (is_archived === true && !template.is_archived) {
+        try {
+            await cancelOutstandingAssignments(req.params.id);
+        } catch (err) {
+            console.error(`Failed to cancel outstanding assignments for archived template ${req.params.id}:`, err.message);
+        }
+    }
+
     res.json({ template: data });
 });
+
+// Archiving a template stops it from being assignable going forward, but a
+// still-open assignment from before doesn't just disappear on its own -- an
+// employee would otherwise keep seeing (and be able to work on) a checklist
+// for something the owner just discontinued. Anything not yet completed gets
+// removed; completed assignments are real history and are left untouched.
+async function cancelOutstandingAssignments(templateId) {
+    const { data: assignments, error: assignmentsError } = await supabase
+        .from('checklist_assignments')
+        .select('id')
+        .eq('template_id', templateId)
+        .neq('status', 'completed');
+    if (assignmentsError) throw new Error(assignmentsError.message);
+    if (assignments.length === 0) return;
+
+    const assignmentIds = assignments.map((a) => a.id);
+    const { error: itemsError } = await supabase.from('checklist_assignment_items').delete().in('assignment_id', assignmentIds);
+    if (itemsError) throw new Error(itemsError.message);
+    const { error: deleteError } = await supabase.from('checklist_assignments').delete().in('id', assignmentIds);
+    if (deleteError) throw new Error(deleteError.message);
+}
 
 // Templates are referenced by assignments once used, so "delete" archives rather than removes the row.
 router.delete('/:id', async (req, res) => {
@@ -268,6 +299,13 @@ router.delete('/:id', async (req, res) => {
         .single();
 
     if (error) return res.status(500).json({ error: 'Failed to archive template' });
+
+    try {
+        await cancelOutstandingAssignments(req.params.id);
+    } catch (err) {
+        console.error(`Failed to cancel outstanding assignments for archived template ${req.params.id}:`, err.message);
+    }
+
     res.json({ template: data });
 });
 
@@ -315,7 +353,13 @@ router.post('/:id/items', async (req, res) => {
     res.status(201).json({ item: data });
 });
 
-// Replace the full item list for a template, e.g. after a frontend drag-and-drop reorder.
+// Replace the full item list for a template, e.g. after a frontend drag-and-drop
+// reorder or a general edit save. The frontend doesn't track item identity
+// across an edit, so this always inserts fresh rows for the submitted list --
+// but existing items can only be hard-deleted if no assignment ever recorded
+// an answer against them; items with history are soft-removed (is_removed)
+// instead, so past checklist runs keep showing exactly what was asked at the
+// time, and the delete can never fail with a foreign-key violation.
 router.put('/:id/items', async (req, res) => {
     let template;
     try {
@@ -334,11 +378,37 @@ router.put('/:id/items', async (req, res) => {
         if (subError) return res.status(400).json({ error: subError });
     }
 
-    const { error: deleteError } = await supabase
+    const { data: existingItems, error: existingError } = await supabase
         .from('checklist_template_items')
-        .delete()
-        .eq('template_id', template.id);
-    if (deleteError) return res.status(500).json({ error: 'Failed to replace items' });
+        .select('id')
+        .eq('template_id', template.id)
+        .eq('is_removed', false);
+    if (existingError) return res.status(500).json({ error: 'Failed to load existing items' });
+    const existingIds = existingItems.map((i) => i.id);
+
+    if (existingIds.length > 0) {
+        const { data: referencedRows, error: referencedError } = await supabase
+            .from('checklist_assignment_items')
+            .select('template_item_id')
+            .in('template_item_id', existingIds);
+        if (referencedError) return res.status(500).json({ error: 'Failed to check item history' });
+        const referencedIds = new Set(referencedRows.map((r) => r.template_item_id));
+
+        const idsToHardDelete = existingIds.filter((id) => !referencedIds.has(id));
+        const idsToSoftRemove = existingIds.filter((id) => referencedIds.has(id));
+
+        if (idsToHardDelete.length > 0) {
+            const { error: deleteError } = await supabase.from('checklist_template_items').delete().in('id', idsToHardDelete);
+            if (deleteError) return res.status(500).json({ error: 'Failed to replace items' });
+        }
+        if (idsToSoftRemove.length > 0) {
+            const { error: softRemoveError } = await supabase
+                .from('checklist_template_items')
+                .update({ is_removed: true })
+                .in('id', idsToSoftRemove);
+            if (softRemoveError) return res.status(500).json({ error: 'Failed to replace items' });
+        }
+    }
 
     if (items.length === 0) {
         return res.json({ items: [] });
@@ -399,6 +469,25 @@ router.delete('/:id/items/:itemId', async (req, res) => {
         return res.status(500).json({ error: 'Failed to fetch template' });
     }
     if (!template) return res.status(404).json({ error: 'Template not found' });
+
+    const { count, error: refError } = await supabase
+        .from('checklist_assignment_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('template_item_id', req.params.itemId);
+    if (refError) return res.status(500).json({ error: 'Failed to check item history' });
+
+    if (count > 0) {
+        const { data, error } = await supabase
+            .from('checklist_template_items')
+            .update({ is_removed: true })
+            .eq('id', req.params.itemId)
+            .eq('template_id', template.id)
+            .select()
+            .maybeSingle();
+        if (error) return res.status(500).json({ error: 'Failed to remove item' });
+        if (!data) return res.status(404).json({ error: 'Item not found' });
+        return res.json({ deleted: true });
+    }
 
     const { data, error } = await supabase
         .from('checklist_template_items')
