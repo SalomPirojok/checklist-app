@@ -134,6 +134,100 @@ router.patch('/organizations/:id/owner', async (req, res) => {
     res.json({ owner: data });
 });
 
+// Replaces an org's owner outright, even if the current one has already
+// connected via Telegram (unlike PATCH .../owner above, which only edits a
+// still-pending row in place). The old owner is deactivated -- not deleted --
+// so their history stays intact and they simply can no longer log in.
+router.post('/organizations/:id/reassign-owner', async (req, res) => {
+    const { owner_username, owner_full_name, confirm_reassign } = req.body || {};
+    if (!owner_username || !owner_username.trim()) {
+        return res.status(400).json({ error: 'owner_username is required' });
+    }
+    if (!owner_full_name || !owner_full_name.trim()) {
+        return res.status(400).json({ error: 'owner_full_name is required' });
+    }
+
+    const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .select('id, name')
+        .eq('id', req.params.id)
+        .maybeSingle();
+    if (orgError) return res.status(500).json({ error: 'Failed to look up organization' });
+    if (!org) return res.status(404).json({ error: 'Organization not found' });
+
+    const { data: currentOwner, error: currentOwnerError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('organization_id', org.id)
+        .eq('role', 'owner')
+        .maybeSingle();
+    if (currentOwnerError) return res.status(500).json({ error: 'Failed to look up current owner' });
+
+    const username = owner_username.trim().replace(/^@/, '');
+
+    const { data: existing, error: existingError } = await supabase
+        .from('users')
+        .select('id, full_name, telegram_id, organization_id, organization:organizations(name)')
+        .ilike('username', username)
+        .maybeSingle();
+    if (existingError) return res.status(500).json({ error: 'Failed to check existing users' });
+
+    if (existing && currentOwner && existing.id === currentOwner.id) {
+        return res.status(400).json({ error: 'This user is already the owner of this organization' });
+    }
+    if (existing && existing.telegram_id === null) {
+        return res.status(409).json({ error: 'This username has already been invited elsewhere' });
+    }
+    if (existing && existing.telegram_id !== null && !confirm_reassign) {
+        return res.status(409).json({
+            error: 'This username already belongs to a connected user in another organization',
+            code: 'EXISTING_USER_FOUND',
+            existing_user: {
+                id: existing.id,
+                full_name: existing.full_name,
+                current_organization_name: existing.organization?.name || null,
+            },
+        });
+    }
+
+    let newOwner;
+    if (existing && existing.telegram_id !== null) {
+        const { data, error } = await supabase
+            .from('users')
+            .update({
+                organization_id: org.id,
+                role: 'owner',
+                full_name: owner_full_name.trim(),
+                is_active: true,
+                department_id: null,
+                can_manage_training: false,
+            })
+            .eq('id', existing.id)
+            .select()
+            .single();
+        if (error) return res.status(500).json({ error: 'Failed to reassign owner' });
+        newOwner = data;
+    } else {
+        const { data, error } = await supabase
+            .from('users')
+            .insert({ username, full_name: owner_full_name.trim(), role: 'owner', organization_id: org.id })
+            .select()
+            .single();
+        if (error) {
+            if (error.code === '23505') return res.status(409).json({ error: 'A user with this telegram_id already exists' });
+            return res.status(500).json({ error: 'Failed to create new owner' });
+        }
+        newOwner = data;
+    }
+
+    if (currentOwner && currentOwner.id !== newOwner.id) {
+        const { error: deactivateError } = await supabase.from('users').update({ is_active: false }).eq('id', currentOwner.id);
+        if (deactivateError) return res.status(500).json({ error: 'Failed to deactivate previous owner' });
+    }
+
+    res.status(200).json({ owner: newOwner, reassigned: !!(existing && existing.telegram_id !== null) });
+});
+
 // Permanently erases an organization and every row that belongs to it.
 // checklist_assignment_items/checklist_assignments and the training-test
 // chain reference users(id) (created_by/assigned_by) with no cascade -- a

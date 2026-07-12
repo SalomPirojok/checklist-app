@@ -137,6 +137,86 @@ function EditOwnerModal({ org, onSave, onClose }) {
     );
 }
 
+// Replaces the org's owner outright -- works even if the current owner has
+// already connected via Telegram (unlike EditOwnerModal, which only fixes a
+// still-pending row in place).
+function ReassignOwnerModal({ org, onReassign, onClose }) {
+    const [username, setUsername] = useState('');
+    const [fullName, setFullName] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
+
+    async function submit(confirmReassign) {
+        setError(null);
+        setSaving(true);
+        try {
+            await onReassign({
+                owner_username: username.trim(),
+                owner_full_name: fullName.trim(),
+                ...(confirmReassign ? { confirm_reassign: true } : {}),
+            });
+            onClose();
+        } catch (err) {
+            if (err.code === 'EXISTING_USER_FOUND') {
+                const u = err.body?.existing_user;
+                const proceed = confirm(
+                    `Username уже принадлежит подключённому пользователю «${u?.full_name}»` +
+                        (u?.current_organization_name ? ` (сейчас в «${u.current_organization_name}»)` : '') +
+                        `. Сделать его владельцем «${org.name}»?`
+                );
+                if (proceed) {
+                    await submit(true);
+                    return;
+                }
+                setError('Отменено.');
+            } else {
+                setError(err.message);
+            }
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        await submit(false);
+    }
+
+    return (
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <h2>Сменить владельца</h2>
+                <p className="hint">
+                    «{org.name}» — текущий владелец{org.owner ? ` (${org.owner.full_name})` : ''} будет деактивирован (его
+                    история сохранится), новый станет владельцем.
+                </p>
+                <form onSubmit={handleSubmit} className="form">
+                    <label className="field">
+                        <span>Имя нового владельца</span>
+                        <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                    </label>
+                    <label className="field">
+                        <span>Telegram username нового владельца (без @)</span>
+                        <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)} />
+                        <span className="hint">Если он ещё не открывал бота — привяжется сам при первом открытии.</span>
+                    </label>
+
+                    {error && <p className="error-text">{error}</p>}
+
+                    <div className="form-actions">
+                        <button type="button" className="btn btn--ghost" onClick={onClose}>
+                            Отмена
+                        </button>
+                        <button type="submit" className="btn" disabled={saving}>
+                            {saving ? 'Сохранение...' : 'Сменить'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
 // Telegram's in-app browser doesn't reliably support window.prompt() (unlike
 // confirm(), which is used elsewhere in this app) -- type-to-confirm needs a
 // real input field in a modal instead.
@@ -202,6 +282,7 @@ export default function PlatformAdminPage() {
     const [error, setError] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingOwnerOrg, setEditingOwnerOrg] = useState(null);
+    const [reassigningOwnerOrg, setReassigningOwnerOrg] = useState(null);
     const [deletingOrg, setDeletingOrg] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
 
@@ -247,6 +328,11 @@ export default function PlatformAdminPage() {
 
     async function handleSaveOwner(org, payload) {
         await api(`/api/platform-admin/organizations/${org.id}/owner`, { method: 'PATCH', body: payload });
+        await load();
+    }
+
+    async function handleReassignOwner(org, payload) {
+        await api(`/api/platform-admin/organizations/${org.id}/reassign-owner`, { method: 'POST', body: payload });
         await load();
     }
 
@@ -306,6 +392,9 @@ export default function PlatformAdminPage() {
                                             Исправить владельца
                                         </button>
                                     )}
+                                    <button type="button" className="btn btn--ghost" onClick={() => setReassigningOwnerOrg(org)}>
+                                        Сменить владельца
+                                    </button>
                                     <button type="button" className="btn btn--ghost btn--danger" onClick={() => setDeletingOrg(org)}>
                                         Удалить навсегда
                                     </button>
@@ -322,6 +411,13 @@ export default function PlatformAdminPage() {
                     org={editingOwnerOrg}
                     onSave={(payload) => handleSaveOwner(editingOwnerOrg, payload)}
                     onClose={() => setEditingOwnerOrg(null)}
+                />
+            )}
+            {reassigningOwnerOrg && (
+                <ReassignOwnerModal
+                    org={reassigningOwnerOrg}
+                    onReassign={(payload) => handleReassignOwner(reassigningOwnerOrg, payload)}
+                    onClose={() => setReassigningOwnerOrg(null)}
                 />
             )}
             {deletingOrg && (
