@@ -5,6 +5,7 @@ import { requireRole } from '../middleware/requireRole.js';
 import { canActOnRole } from '../lib/roles.js';
 import { computeLateness } from '../lib/lateness.js';
 import { loadDepartmentScheduleDays, resolveScheduleForDay } from '../lib/schedule.js';
+import { getOrgTemplateIds } from '../lib/orgTemplates.js';
 
 const router = Router();
 
@@ -79,6 +80,13 @@ router.get('/:id/profile', async (req, res) => {
         .single();
     if (orgError) return res.status(500).json({ error: 'Failed to load organization settings' });
 
+    let orgTemplateIds;
+    try {
+        orgTemplateIds = await getOrgTemplateIds(req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to load organization templates' });
+    }
+
     const [
         { data: attendanceRecords, error: attendanceError },
         { data: assignments, error: assignmentsError },
@@ -92,13 +100,16 @@ router.get('/:id/profile', async (req, res) => {
             .gte('created_at', periodStartIso)
             .lt('created_at', periodEndIso)
             .order('created_at', { ascending: false }),
-        supabase
-            .from('checklist_assignments')
-            .select('id, status')
-            .eq('assigned_to', employee.id)
-            .eq('is_standing', false)
-            .gte('created_at', periodStartIso)
-            .lt('created_at', periodEndIso),
+        orgTemplateIds.length
+            ? supabase
+                  .from('checklist_assignments')
+                  .select('id, status')
+                  .eq('assigned_to', employee.id)
+                  .in('template_id', orgTemplateIds)
+                  .eq('is_standing', false)
+                  .gte('created_at', periodStartIso)
+                  .lt('created_at', periodEndIso)
+            : Promise.resolve({ data: [], error: null }),
         supabase
             .from('penalties')
             .select('*')

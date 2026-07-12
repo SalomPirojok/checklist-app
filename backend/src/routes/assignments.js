@@ -9,6 +9,7 @@ import {
     verifySignatureBelongsToAssignment,
 } from '../lib/storage.js';
 import { buildInitialSubCheckboxResults, allSubCheckboxesChecked } from '../lib/subCheckboxes.js';
+import { getOrgTemplateIds } from '../lib/orgTemplates.js';
 
 const router = Router();
 
@@ -58,7 +59,10 @@ async function getOrgUserIds(organizationId) {
     return data.map((u) => u.id);
 }
 
-// Assignments don't carry organization_id directly, so scoping goes through assigned_to's organization.
+// Assignments don't carry organization_id directly -- scoped via the
+// template's organization, not the assignee's CURRENT organization (an
+// assignee who's since been reassigned to a different org must not keep
+// read/write access to an assignment that belongs to their old one).
 async function loadAssignmentInOrg(assignmentId, organizationId) {
     const { data: assignment, error } = await supabase
         .from('checklist_assignments')
@@ -68,12 +72,12 @@ async function loadAssignmentInOrg(assignmentId, organizationId) {
     if (error) throw new Error('lookup failed');
     if (!assignment) return null;
 
-    const { data: assignee, error: userError } = await supabase
-        .from('users')
+    const { data: template, error: templateError } = await supabase
+        .from('checklist_templates')
         .select('id, organization_id')
-        .eq('id', assignment.assigned_to)
+        .eq('id', assignment.template_id)
         .maybeSingle();
-    if (userError || !assignee || assignee.organization_id !== organizationId) return null;
+    if (templateError || !template || template.organization_id !== organizationId) return null;
 
     return assignment;
 }
@@ -149,7 +153,21 @@ function computeStatusUpdate(assignment, allItemsDone, hasSignature) {
 router.get('/', async (req, res) => {
     const { status, assigned_to } = req.query;
 
-    let query = supabase.from('checklist_assignments').select('*').order('due_at', { ascending: true });
+    let orgTemplateIds;
+    try {
+        orgTemplateIds = await getOrgTemplateIds(req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to list assignments' });
+    }
+    if (orgTemplateIds.length === 0) {
+        return res.json({ assignments: [] });
+    }
+
+    let query = supabase
+        .from('checklist_assignments')
+        .select('*')
+        .in('template_id', orgTemplateIds)
+        .order('due_at', { ascending: true });
 
     if (req.user.role === 'employee') {
         query = query.eq('assigned_to', req.user.id);

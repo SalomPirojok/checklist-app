@@ -1,6 +1,7 @@
 import { supabase } from './supabase.js';
 import { computeLateness } from './lateness.js';
 import { resolveScheduleForDay } from './schedule.js';
+import { getOrgTemplateIds } from './orgTemplates.js';
 
 function startOfDayUTC(date) {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString();
@@ -30,6 +31,7 @@ export async function buildDailyReport(organizationId, day) {
     if (usersError) throw new Error(usersError.message);
     const orgUserIds = orgUsers.map((u) => u.id);
     const activeStaff = orgUsers.filter((u) => u.is_active && u.role !== 'owner');
+    const orgTemplateIds = await getOrgTemplateIds(organizationId);
 
     const { data: allScheduleDays, error: scheduleError } = await supabase
         .from('department_schedule_days')
@@ -59,11 +61,12 @@ export async function buildDailyReport(organizationId, day) {
             .eq('organization_id', organizationId)
             .gte('created_at', dayStart)
             .lt('created_at', dayEnd),
-        orgUserIds.length
+        orgUserIds.length && orgTemplateIds.length
             ? supabase
                   .from('checklist_assignments')
                   .select('id, status, assigned_to')
                   .in('assigned_to', orgUserIds)
+                  .in('template_id', orgTemplateIds)
                   .eq('is_standing', false)
                   .or(
                       `and(due_at.gte.${dayStart},due_at.lt.${dayEnd}),and(due_at.is.null,created_at.gte.${dayStart},created_at.lt.${dayEnd})`

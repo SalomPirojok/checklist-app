@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { flipOverdueAssignments } from '../lib/overdueSync.js';
+import { getOrgTemplateIds } from '../lib/orgTemplates.js';
 
 const router = Router();
 
@@ -32,20 +33,32 @@ router.get('/today', async (req, res) => {
     const orgUserIds = orgUsers.map((u) => u.id);
     const userMap = new Map(orgUsers.map((u) => [u.id, u]));
 
+    let orgTemplateIds;
+    try {
+        orgTemplateIds = await getOrgTemplateIds(req.user.organizationId);
+    } catch {
+        return res.status(500).json({ error: 'Failed to load organization templates' });
+    }
+
     const now = new Date();
     const todayStart = startOfDayUTC(now);
     const todayEnd = endOfDayUTC(now);
 
+    // Scoped by both the assignee's current org membership AND the template's
+    // org -- an assignee who's since moved to a different organization must
+    // not surface their old assignments here (or vice versa).
+    const canHaveAssignments = orgUserIds.length > 0 && orgTemplateIds.length > 0;
     const [
         { data: todaysAssignments, error: todaysError },
         { data: overdueAssignments, error: overdueError },
         { data: standingAssignments, error: standingError },
     ] = await Promise.all([
-        orgUserIds.length
+        canHaveAssignments
             ? supabase
                   .from('checklist_assignments')
                   .select('*')
                   .in('assigned_to', orgUserIds)
+                  .in('template_id', orgTemplateIds)
                   .eq('is_standing', false)
                   // A no-deadline assignment (due_at null) has no due-date range to
                   // match, so it's included instead by checking created_at is today.
@@ -54,22 +67,24 @@ router.get('/today', async (req, res) => {
                   )
                   .order('due_at', { ascending: true })
             : { data: [], error: null },
-        orgUserIds.length
+        canHaveAssignments
             ? supabase
                   .from('checklist_assignments')
                   .select('*')
                   .in('assigned_to', orgUserIds)
+                  .in('template_id', orgTemplateIds)
                   .eq('is_standing', false)
                   .eq('status', 'overdue')
                   .order('due_at', { ascending: true })
             : { data: [], error: null },
         // Standing checklists are permanent and never overdue, so they're kept
         // entirely separate from the day's stats -- shown as their own section.
-        orgUserIds.length
+        canHaveAssignments
             ? supabase
                   .from('checklist_assignments')
                   .select('*')
                   .in('assigned_to', orgUserIds)
+                  .in('template_id', orgTemplateIds)
                   .eq('is_standing', true)
                   .order('created_at', { ascending: true })
             : { data: [], error: null },
