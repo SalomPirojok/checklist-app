@@ -61,9 +61,6 @@ export default function EmployeeLayout() {
                 <NavLink to="/training" className={tabClass}>
                     Обучение
                 </NavLink>
-                <NavLink to="/schedule" className={tabClass}>
-                    График
-                </NavLink>
                 {user.is_platform_admin && (
                     <NavLink to="/platform-admin" className={tabClass}>
                         Админ

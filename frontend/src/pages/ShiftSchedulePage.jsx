@@ -448,7 +448,7 @@ export default function ShiftSchedulePage() {
     return (
         <div className="page">
             <div className="page-header">
-                <button type="button" className="btn btn--ghost back-link" onClick={() => navigate('/schedule')}>
+                <button type="button" className="btn btn--ghost back-link" onClick={() => navigate('/')}>
                     ← Назад
                 </button>
             </div>

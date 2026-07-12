@@ -10,7 +10,6 @@ import trainingRouter from './routes/training.js';
 import departmentsRouter from './routes/departments.js';
 import penaltiesRouter from './routes/penalties.js';
 import reportsRouter from './routes/reports.js';
-import schedulesRouter from './routes/schedules.js';
 import scheduleRouter from './routes/schedule.js';
 import platformAdminRouter from './routes/platformAdmin.js';
 
@@ -34,7 +33,6 @@ app.use('/api/training', trainingRouter);
 app.use('/api/departments', departmentsRouter);
 app.use('/api/penalties', penaltiesRouter);
 app.use('/api/reports', reportsRouter);
-app.use('/api/schedules', schedulesRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/platform-admin', platformAdminRouter);
 

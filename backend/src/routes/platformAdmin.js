@@ -317,8 +317,6 @@ async function deleteOrganizationCascade(organizationId) {
         'attendance_records',
         'penalties',
         'schedule_week_templates',
-        'department_schedule_days',
-        'department_schedules',
     ];
     for (const table of deletesByOrgId) {
         const { error } = await supabase.from(table).delete().eq('organization_id', organizationId);

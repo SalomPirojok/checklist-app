@@ -37,7 +37,7 @@ export default function AppLayout() {
                 <NavLink to="/reports" className={tabClass}>
                     Отчёты
                 </NavLink>
-                <NavLink to="/schedule" className={tabClass}>
+                <NavLink to="/shift-schedule" className={tabClass}>
                     График
                 </NavLink>
                 {user.is_platform_admin && (
