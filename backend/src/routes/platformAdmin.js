@@ -136,8 +136,16 @@ router.patch('/organizations/:id/owner', async (req, res) => {
 
 // Same "pre-add by username" pattern already used for inviting employees, just
 // with role=owner and a brand-new organization instead of an existing one.
+//
+// A username can also belong to someone who's *already* connected to Telegram
+// (e.g. a former employee elsewhere in the system) -- login always matches by
+// telegram_id first, so a fresh telegram_id:null row under that username
+// could never actually be claimed by them. In that case this asks for
+// confirmation (409 + existing_user details) and, once confirmed via
+// confirm_reassign, moves that exact user into the new org as its owner
+// instead of creating a duplicate identity.
 router.post('/organizations', async (req, res) => {
-    const { organization_name, owner_username, owner_full_name } = req.body || {};
+    const { organization_name, owner_username, owner_full_name, confirm_reassign } = req.body || {};
     if (!organization_name || !organization_name.trim()) {
         return res.status(400).json({ error: 'organization_name is required' });
     }
@@ -150,14 +158,28 @@ router.post('/organizations', async (req, res) => {
 
     const username = owner_username.trim().replace(/^@/, '');
 
-    const { data: pending, error: pendingError } = await supabase
+    const { data: existing, error: existingError } = await supabase
         .from('users')
-        .select('id')
-        .is('telegram_id', null)
+        .select('id, full_name, telegram_id, organization_id, organization:organizations(name)')
         .ilike('username', username)
         .maybeSingle();
-    if (pendingError) return res.status(500).json({ error: 'Failed to check existing invites' });
-    if (pending) return res.status(409).json({ error: 'This username has already been invited' });
+    if (existingError) return res.status(500).json({ error: 'Failed to check existing users' });
+
+    if (existing && existing.telegram_id === null) {
+        return res.status(409).json({ error: 'This username has already been invited' });
+    }
+
+    if (existing && existing.telegram_id !== null && !confirm_reassign) {
+        return res.status(409).json({
+            error: 'This username already belongs to a connected user in another organization',
+            code: 'EXISTING_USER_FOUND',
+            existing_user: {
+                id: existing.id,
+                full_name: existing.full_name,
+                current_organization_name: existing.organization?.name || null,
+            },
+        });
+    }
 
     const { data: newOrg, error: orgError } = await supabase
         .from('organizations')
@@ -165,6 +187,28 @@ router.post('/organizations', async (req, res) => {
         .select()
         .single();
     if (orgError) return res.status(500).json({ error: 'Failed to create organization' });
+
+    // Reassign path: move the existing connected user into the new org as owner.
+    if (existing && existing.telegram_id !== null) {
+        const { data: reassignedOwner, error: reassignError } = await supabase
+            .from('users')
+            .update({
+                organization_id: newOrg.id,
+                role: 'owner',
+                full_name: owner_full_name.trim(),
+                is_active: true,
+                department_id: null,
+                can_manage_training: false,
+            })
+            .eq('id', existing.id)
+            .select()
+            .single();
+        if (reassignError) {
+            await supabase.from('organizations').delete().eq('id', newOrg.id);
+            return res.status(500).json({ error: 'Failed to reassign owner' });
+        }
+        return res.status(201).json({ organization: newOrg, owner: reassignedOwner, reassigned: true });
+    }
 
     const { data: newOwner, error: ownerError } = await supabase
         .from('users')

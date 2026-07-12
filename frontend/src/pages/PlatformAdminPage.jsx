@@ -14,8 +14,7 @@ function CreateOrgModal({ onCreate, onClose }) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
 
-    async function handleSubmit(e) {
-        e.preventDefault();
+    async function submit(confirmReassign) {
         setError(null);
         setSaving(true);
         try {
@@ -23,13 +22,33 @@ function CreateOrgModal({ onCreate, onClose }) {
                 organization_name: orgName.trim(),
                 owner_username: ownerUsername.trim(),
                 owner_full_name: ownerFullName.trim(),
+                ...(confirmReassign ? { confirm_reassign: true } : {}),
             });
             onClose();
         } catch (err) {
-            setError(err.message);
+            if (err.code === 'EXISTING_USER_FOUND') {
+                const u = err.body?.existing_user;
+                const proceed = confirm(
+                    `Username уже принадлежит подключённому пользователю «${u?.full_name}»` +
+                        (u?.current_organization_name ? ` (сейчас в «${u.current_organization_name}»)` : '') +
+                        `. Перевести его в владельцы новой организации «${orgName.trim()}»?`
+                );
+                if (proceed) {
+                    await submit(true);
+                    return;
+                }
+                setError('Отменено.');
+            } else {
+                setError(err.message);
+            }
         } finally {
             setSaving(false);
         }
+    }
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        await submit(false);
     }
 
     return (
