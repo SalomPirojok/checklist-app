@@ -117,18 +117,6 @@ export default function EmployeeChecklistDetailPage() {
         }
     }
 
-    async function handleReset() {
-        if (!confirm('Сбросить чек-лист и пройти заново?')) return;
-        try {
-            const res = await api(`/api/assignments/${id}/reset`, { method: 'POST' });
-            setAssignment(res.assignment);
-            setItems(res.items);
-            setError(null);
-        } catch (err) {
-            setError(err.message);
-        }
-    }
-
     if (loading) {
         return (
             <div className="page">
@@ -176,12 +164,6 @@ export default function EmployeeChecklistDetailPage() {
             ) : (
                 <p className="hint">Дедлайн: {assignment.due_at ? new Date(assignment.due_at).toLocaleString('ru-RU') : 'без дедлайна'}</p>
             )}
-            {assignment.is_standing && (
-                <button type="button" className="btn btn--ghost" onClick={handleReset}>
-                    Сбросить
-                </button>
-            )}
-
             <div className="progress-meter">
                 <div className="progress-meter__track">
                     <div className="progress-meter__fill" style={{ width: `${progressPct}%` }} />

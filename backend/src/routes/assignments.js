@@ -504,8 +504,8 @@ router.post('/:id/reset', async (req, res) => {
     if (!assignment) return res.status(404).json({ error: 'Assignment not found' });
 
     const isOwnerOrManager = req.user.role === 'owner' || req.user.role === 'manager';
-    if (!isOwnerOrManager && assignment.assigned_to !== req.user.id) {
-        return res.status(403).json({ error: 'Not allowed to reset this assignment' });
+    if (!isOwnerOrManager) {
+        return res.status(403).json({ error: 'Only an owner or manager can reset a checklist' });
     }
     if (!assignment.is_standing) {
         return res.status(400).json({ error: 'Only standing checklists can be reset' });
