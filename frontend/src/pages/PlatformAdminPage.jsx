@@ -67,12 +67,64 @@ function CreateOrgModal({ onCreate, onClose }) {
     );
 }
 
+function EditOwnerModal({ org, onSave, onClose }) {
+    const [username, setUsername] = useState(org.owner?.username || '');
+    const [fullName, setFullName] = useState(org.owner?.full_name || '');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        setError(null);
+        setSaving(true);
+        try {
+            await onSave({ username: username.trim(), full_name: fullName.trim() });
+            onClose();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+                <h2>Исправить владельца</h2>
+                <p className="hint">«{org.name}» — владелец ещё не подключил Telegram, можно поправить данные.</p>
+                <form onSubmit={handleSubmit} className="form">
+                    <label className="field">
+                        <span>Имя владельца</span>
+                        <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                    </label>
+                    <label className="field">
+                        <span>Telegram username (без @)</span>
+                        <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)} />
+                    </label>
+
+                    {error && <p className="error-text">{error}</p>}
+
+                    <div className="form-actions">
+                        <button type="button" className="btn btn--ghost" onClick={onClose}>
+                            Отмена
+                        </button>
+                        <button type="submit" className="btn" disabled={saving}>
+                            {saving ? 'Сохранение...' : 'Сохранить'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
 export default function PlatformAdminPage() {
     const api = useApiClient();
     const [organizations, setOrganizations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [editingOwnerOrg, setEditingOwnerOrg] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
 
     async function load() {
@@ -115,6 +167,11 @@ export default function PlatformAdminPage() {
         await load();
     }
 
+    async function handleSaveOwner(org, payload) {
+        await api(`/api/platform-admin/organizations/${org.id}/owner`, { method: 'PATCH', body: payload });
+        await load();
+    }
+
     return (
         <div className="page">
             <div className="page-header">
@@ -141,15 +198,29 @@ export default function PlatformAdminPage() {
                                     <div className="hint">Создана: {formatDate(org.created_at)}</div>
                                     <div className="hint">Сотрудников: {org.employee_count}</div>
                                     <div className="hint">Последняя активность: {formatDate(org.last_activity_at)}</div>
+                                    {org.owner && (
+                                        <div className="hint">
+                                            Владелец: {org.owner.full_name}
+                                            {org.owner.username && ` · @${org.owner.username}`}
+                                            {!org.owner.telegram_id && <span className="tag tag--pending">не подключён</span>}
+                                        </div>
+                                    )}
                                 </div>
-                                <button
-                                    type="button"
-                                    className={org.is_suspended ? 'btn btn--ghost' : 'btn btn--ghost btn--danger'}
-                                    onClick={() => handleToggleSuspend(org)}
-                                    disabled={togglingId === org.id}
-                                >
-                                    {togglingId === org.id ? '...' : org.is_suspended ? 'Активировать' : 'Приостановить'}
-                                </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                                    <button
+                                        type="button"
+                                        className={org.is_suspended ? 'btn btn--ghost' : 'btn btn--ghost btn--danger'}
+                                        onClick={() => handleToggleSuspend(org)}
+                                        disabled={togglingId === org.id}
+                                    >
+                                        {togglingId === org.id ? '...' : org.is_suspended ? 'Активировать' : 'Приостановить'}
+                                    </button>
+                                    {org.owner && !org.owner.telegram_id && (
+                                        <button type="button" className="btn btn--ghost" onClick={() => setEditingOwnerOrg(org)}>
+                                            Исправить владельца
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </li>
                     ))}
@@ -157,6 +228,13 @@ export default function PlatformAdminPage() {
             )}
 
             {showCreateModal && <CreateOrgModal onCreate={handleCreate} onClose={() => setShowCreateModal(false)} />}
+            {editingOwnerOrg && (
+                <EditOwnerModal
+                    org={editingOwnerOrg}
+                    onSave={(payload) => handleSaveOwner(editingOwnerOrg, payload)}
+                    onClose={() => setEditingOwnerOrg(null)}
+                />
+            )}
         </div>
     );
 }
