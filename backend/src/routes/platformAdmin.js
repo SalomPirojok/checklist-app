@@ -134,6 +134,142 @@ router.patch('/organizations/:id/owner', async (req, res) => {
     res.json({ owner: data });
 });
 
+// Permanently erases an organization and every row that belongs to it.
+// checklist_assignment_items/checklist_assignments and the training-test
+// chain reference users(id) (created_by/assigned_by) with no cascade -- a
+// plain `delete from organizations` hits a foreign-key violation the moment
+// Postgres tries to cascade-delete a user before the row that still
+// references them, so each dependent table is cleared explicitly in
+// dependency order first.
+async function deleteOrganizationCascade(organizationId) {
+    const { data: users, error: usersError } = await supabase.from('users').select('id').eq('organization_id', organizationId);
+    if (usersError) throw new Error(usersError.message);
+    const userIds = users.map((u) => u.id);
+
+    const { data: templates, error: templatesError } = await supabase
+        .from('checklist_templates')
+        .select('id')
+        .eq('organization_id', organizationId);
+    if (templatesError) throw new Error(templatesError.message);
+    const templateIds = templates.map((t) => t.id);
+
+    if (templateIds.length) {
+        const { data: assignments, error: assignmentsError } = await supabase
+            .from('checklist_assignments')
+            .select('id')
+            .in('template_id', templateIds);
+        if (assignmentsError) throw new Error(assignmentsError.message);
+        const assignmentIds = assignments.map((a) => a.id);
+        if (assignmentIds.length) {
+            const r1 = await supabase.from('checklist_assignment_items').delete().in('assignment_id', assignmentIds);
+            if (r1.error) throw new Error(r1.error.message);
+            const r2 = await supabase.from('checklist_assignments').delete().in('id', assignmentIds);
+            if (r2.error) throw new Error(r2.error.message);
+        }
+    }
+
+    const { data: materials, error: materialsError } = await supabase
+        .from('training_materials')
+        .select('id')
+        .eq('organization_id', organizationId);
+    if (materialsError) throw new Error(materialsError.message);
+    const materialIds = materials.map((m) => m.id);
+
+    if (materialIds.length) {
+        const { data: tests, error: testsError } = await supabase.from('training_tests').select('id').in('material_id', materialIds);
+        if (testsError) throw new Error(testsError.message);
+        const testIds = tests.map((t) => t.id);
+
+        if (testIds.length) {
+            const { data: attempts, error: attemptsError } = await supabase
+                .from('training_test_attempts')
+                .select('id')
+                .in('test_id', testIds);
+            if (attemptsError) throw new Error(attemptsError.message);
+            const attemptIds = attempts.map((a) => a.id);
+            if (attemptIds.length) {
+                const r3 = await supabase.from('training_test_attempt_answers').delete().in('attempt_id', attemptIds);
+                if (r3.error) throw new Error(r3.error.message);
+            }
+            const r4 = await supabase.from('training_test_attempts').delete().in('test_id', testIds);
+            if (r4.error) throw new Error(r4.error.message);
+
+            const { data: questions, error: questionsError } = await supabase
+                .from('training_test_questions')
+                .select('id')
+                .in('test_id', testIds);
+            if (questionsError) throw new Error(questionsError.message);
+            const questionIds = questions.map((q) => q.id);
+            if (questionIds.length) {
+                const r5 = await supabase.from('training_test_options').delete().in('question_id', questionIds);
+                if (r5.error) throw new Error(r5.error.message);
+            }
+            const r6 = await supabase.from('training_test_questions').delete().in('test_id', testIds);
+            if (r6.error) throw new Error(r6.error.message);
+            const r7 = await supabase.from('training_tests').delete().in('id', testIds);
+            if (r7.error) throw new Error(r7.error.message);
+        }
+    }
+
+    if (templateIds.length) {
+        const r8 = await supabase.from('checklist_template_items').delete().in('template_id', templateIds);
+        if (r8.error) throw new Error(r8.error.message);
+        const r9 = await supabase.from('checklist_templates').delete().in('id', templateIds);
+        if (r9.error) throw new Error(r9.error.message);
+    }
+
+    const deletesByOrgId = [
+        'training_materials',
+        'attendance_records',
+        'penalties',
+        'schedule_week_templates',
+        'department_schedule_days',
+        'department_schedules',
+    ];
+    for (const table of deletesByOrgId) {
+        const { error } = await supabase.from(table).delete().eq('organization_id', organizationId);
+        if (error) throw new Error(error.message);
+    }
+
+    if (userIds.length) {
+        const rShifts = await supabase.from('schedule_shifts').delete().in('user_id', userIds);
+        if (rShifts.error) throw new Error(rShifts.error.message);
+    }
+
+    const rDepartments = await supabase.from('departments').delete().eq('organization_id', organizationId);
+    if (rDepartments.error) throw new Error(rDepartments.error.message);
+
+    const rUsers = await supabase.from('users').delete().eq('organization_id', organizationId);
+    if (rUsers.error) throw new Error(rUsers.error.message);
+
+    const rOrg = await supabase.from('organizations').delete().eq('id', organizationId);
+    if (rOrg.error) throw new Error(rOrg.error.message);
+}
+
+router.delete('/organizations/:id', async (req, res) => {
+    const { confirm_name } = req.body || {};
+
+    const { data: org, error: orgLookupError } = await supabase
+        .from('organizations')
+        .select('id, name')
+        .eq('id', req.params.id)
+        .maybeSingle();
+    if (orgLookupError) return res.status(500).json({ error: 'Failed to look up organization' });
+    if (!org) return res.status(404).json({ error: 'Organization not found' });
+
+    if (confirm_name !== org.name) {
+        return res.status(400).json({ error: 'confirm_name must exactly match the organization name' });
+    }
+
+    try {
+        await deleteOrganizationCascade(org.id);
+    } catch (err) {
+        return res.status(500).json({ error: err.message || 'Failed to delete organization' });
+    }
+
+    res.status(204).end();
+});
+
 // Same "pre-add by username" pattern already used for inviting employees, just
 // with role=owner and a brand-new organization instead of an existing one.
 //

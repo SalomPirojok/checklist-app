@@ -191,6 +191,26 @@ export default function PlatformAdminPage() {
         await load();
     }
 
+    async function handleDelete(org) {
+        const typed = prompt(
+            `Это необратимо удалит организацию «${org.name}» и ВСЕ её данные (сотрудников, чек-листы, историю, штрафы, обучение).\n\nЧтобы подтвердить, введите точное название организации:`
+        );
+        if (typed === null) return;
+        if (typed !== org.name) {
+            setError('Название не совпадает — удаление отменено.');
+            return;
+        }
+        try {
+            await api(`/api/platform-admin/organizations/${org.id}`, {
+                method: 'DELETE',
+                body: { confirm_name: typed },
+            });
+            await load();
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
     return (
         <div className="page">
             <div className="page-header">
@@ -239,6 +259,9 @@ export default function PlatformAdminPage() {
                                             Исправить владельца
                                         </button>
                                     )}
+                                    <button type="button" className="btn btn--ghost btn--danger" onClick={() => handleDelete(org)}>
+                                        Удалить навсегда
+                                    </button>
                                 </div>
                             </div>
                         </li>
