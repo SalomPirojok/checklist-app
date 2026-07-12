@@ -33,6 +33,25 @@ const upload = multer({
     },
 });
 
+// An employee who's already checked out for the day shouldn't be able to keep
+// filling in checklists -- owner/manager acting on the assignment are never
+// subject to this (they don't check in/out at all).
+async function hasCheckedOutToday(userId) {
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+    const todayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
+    const { data, error } = await supabase
+        .from('attendance_records')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('type', 'check_out')
+        .gte('created_at', todayStart)
+        .lt('created_at', todayEnd)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    return !!data;
+}
+
 async function getOrgUserIds(organizationId) {
     const { data, error } = await supabase.from('users').select('id').eq('organization_id', organizationId);
     if (error) throw new Error('failed to load org users');
@@ -190,6 +209,24 @@ router.post('/', async (req, res) => {
         return res.status(400).json({ error: 'assigned_to must be an active employee or manager in your organization' });
     }
 
+    // A standing checklist is meant to be a single persistent record per
+    // employee+template -- assigning a second one (e.g. a double click, or
+    // reassigning "because it's already done") would silently orphan the
+    // first one's history and confuse the employee with two copies.
+    if (standing) {
+        const { data: existingStanding, error: existingStandingError } = await supabase
+            .from('checklist_assignments')
+            .select('id')
+            .eq('template_id', template_id)
+            .eq('assigned_to', assigned_to)
+            .eq('is_standing', true)
+            .maybeSingle();
+        if (existingStandingError) return res.status(500).json({ error: 'Failed to check existing assignment' });
+        if (existingStanding) {
+            return res.status(409).json({ error: 'У этого сотрудника уже есть постоянный чек-лист по этому шаблону' });
+        }
+    }
+
     const { data: templateItems, error: itemsError } = await supabase
         .from('checklist_template_items')
         .select('id, sub_checkboxes')
@@ -307,6 +344,9 @@ router.post('/:id/signature', upload.single('signature'), async (req, res) => {
     if (!isOwnerOrManager && assignment.assigned_to !== req.user.id) {
         return res.status(403).json({ error: 'Not allowed to update this assignment' });
     }
+    if (!isOwnerOrManager && (await hasCheckedOutToday(req.user.id))) {
+        return res.status(403).json({ error: 'Смена завершена — заполнение чек-листов недоступно до следующего прихода' });
+    }
 
     if (!req.file) {
         return res.status(400).json({ error: 'signature file is required' });
@@ -363,6 +403,9 @@ router.post('/:id/items/:itemId/photo', upload.single('photo'), async (req, res)
     if (!isOwnerOrManager && assignment.assigned_to !== req.user.id) {
         return res.status(403).json({ error: 'Not allowed to update this assignment' });
     }
+    if (!isOwnerOrManager && (await hasCheckedOutToday(req.user.id))) {
+        return res.status(403).json({ error: 'Смена завершена — заполнение чек-листов недоступно до следующего прихода' });
+    }
 
     if (!req.file) {
         return res.status(400).json({ error: 'photo file is required' });
@@ -403,6 +446,9 @@ router.patch('/:id/items/:itemId', async (req, res) => {
     const isOwnerOrManager = req.user.role === 'owner' || req.user.role === 'manager';
     if (!isOwnerOrManager && assignment.assigned_to !== req.user.id) {
         return res.status(403).json({ error: 'Not allowed to update this assignment' });
+    }
+    if (!isOwnerOrManager && (await hasCheckedOutToday(req.user.id))) {
+        return res.status(403).json({ error: 'Смена завершена — заполнение чек-листов недоступно до следующего прихода' });
     }
 
     const { data: item, error: itemError } = await supabase

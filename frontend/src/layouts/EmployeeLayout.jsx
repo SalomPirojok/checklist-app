@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApiClient } from '../api/useApiClient';
 import CheckInScreen from '../pages/CheckInScreen';
+import CheckedOutScreen from '../components/CheckedOutScreen';
 import AttendanceBar from '../components/AttendanceBar';
 
 function tabClass({ isActive }) {
@@ -38,6 +39,9 @@ export default function EmployeeLayout() {
 
     if (!attendance.check_in) {
         return <CheckInScreen onCheckedIn={loadAttendance} />;
+    }
+    if (attendance.check_out) {
+        return <CheckedOutScreen attendance={attendance} />;
     }
 
     return (
