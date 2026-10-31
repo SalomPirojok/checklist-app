@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ROLE_LABELS } from '../constants';
+import ModuleSwitcher from '../components/ModuleSwitcher';
 
 function tabClass({ isActive }) {
     return isActive ? 'tab-bar__item tab-bar__item--active' : 'tab-bar__item';
@@ -16,6 +17,7 @@ export default function AppLayout() {
                     <div className="app-header__name">{user.full_name}</div>
                     <div className="hint">{ROLE_LABELS[user.role] || user.role}</div>
                 </div>
+                <ModuleSwitcher />
             </header>
 
             <nav className="tab-bar">

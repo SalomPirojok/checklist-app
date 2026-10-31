@@ -1,5 +1,7 @@
+import { lazy, Suspense } from 'react';
 import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ModuleProvider, useModule } from './context/ModuleContext';
 import LoadingScreen from './components/LoadingScreen';
 import ErrorScreen from './components/ErrorScreen';
 import UnregisteredScreen from './components/UnregisteredScreen';
@@ -29,6 +31,23 @@ import ReportSettingsPage from './pages/ReportSettingsPage';
 import EmployeeProfilePage from './pages/EmployeeProfilePage';
 import ShiftSchedulePage from './pages/ShiftSchedulePage';
 
+// Loaded only when someone actually opens the CRM, so Kontrolla-only users
+// never download it.
+const CrmApp = lazy(() => import('./modules/crm/CrmApp'));
+
+function OrganizationApp() {
+    const { ready, mode } = useModule();
+    if (!ready) return <LoadingScreen />;
+    if (mode === 'crm') {
+        return (
+            <Suspense fallback={<LoadingScreen />}>
+                <CrmApp />
+            </Suspense>
+        );
+    }
+    return <KontrollaApp />;
+}
+
 function AppContent() {
     const { status, error, user } = useAuth();
 
@@ -51,6 +70,15 @@ function AppContent() {
         );
     }
 
+    return (
+        <ModuleProvider>
+            <OrganizationApp />
+        </ModuleProvider>
+    );
+}
+
+function KontrollaApp() {
+    const { user } = useAuth();
     const canManage = user.role === 'owner' || user.role === 'manager';
 
     return (

@@ -258,6 +258,40 @@ h3 {
     padding: var(--space-4);
     border-bottom: 1px solid var(--border-color);
     background: var(--tg-theme-bg-color, #ffffff);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+/* --- module switcher (Kontrolla | CRM) --- */
+
+.module-switcher {
+    display: inline-flex;
+    flex-shrink: 0;
+    padding: 3px;
+    gap: 2px;
+    border-radius: var(--radius-pill);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+}
+
+.module-switcher__item {
+    border: none;
+    background: transparent;
+    color: var(--tg-theme-text-color, #0f172a);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+}
+
+.module-switcher__item--active {
+    background: var(--tg-theme-button-color, #2481cc);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    font-weight: 600;
 }
 
 .app-header__name {

@@ -5,6 +5,7 @@ import { useApiClient } from '../api/useApiClient';
 import CheckInScreen from '../pages/CheckInScreen';
 import CheckedOutScreen from '../components/CheckedOutScreen';
 import AttendanceBar from '../components/AttendanceBar';
+import ModuleSwitcher from '../components/ModuleSwitcher';
 
 function tabClass({ isActive }) {
     return isActive ? 'tab-bar__item tab-bar__item--active' : 'tab-bar__item';
@@ -51,6 +52,7 @@ export default function EmployeeLayout() {
                     <div className="app-header__name">{user.full_name}</div>
                     <div className="hint">Сотрудник</div>
                 </div>
+                <ModuleSwitcher />
             </header>
             <AttendanceBar attendance={attendance} onCheckedOut={loadAttendance} />
 
