@@ -287,6 +287,216 @@
     }
 }
 
+.crm-row--button {
+    width: 100%;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.crm-row--muted {
+    opacity: 0.55;
+}
+
+.crm-plate {
+    flex-shrink: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    padding: 3px 8px;
+    border: 1.5px solid currentColor;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+}
+
+.crm-field-triple {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: var(--space-2);
+}
+
+.crm-field-triple .field input {
+    min-width: 0;
+    width: 100%;
+}
+
+.crm-inline-link {
+    align-self: flex-start;
+    padding-left: 0;
+}
+
+.crm-master-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.crm-master-row select {
+    flex: 1;
+    min-width: 0;
+}
+
+.crm-master-row input {
+    width: 72px;
+}
+
+.crm-pair-cards {
+    display: grid;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+@media (min-width: 600px) {
+    .crm-pair-cards {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.crm-line {
+    align-items: flex-start;
+    flex-wrap: nowrap;
+}
+
+.crm-line__side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-1);
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.crm-line__side .btn {
+    padding: 4px 6px;
+    min-height: 0;
+}
+
+.crm-totals {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    margin-top: var(--space-3);
+}
+
+.crm-totals > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.crm-totals__strong {
+    border-top: 1px solid var(--border-color);
+    padding-top: var(--space-2);
+    font-size: var(--font-size-md);
+}
+
+.crm-inline-input {
+    width: 140px;
+    text-align: right;
+    font: inherit;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #0f172a);
+}
+
+.crm-debt {
+    color: var(--status-critical);
+}
+
+.crm-warning {
+    padding: var(--space-3);
+    border-radius: var(--radius-sm);
+    background: var(--status-warning-bg);
+    color: var(--status-warning);
+    margin: 0;
+}
+
+.crm-issue-btn {
+    margin-top: var(--space-4);
+    background: var(--status-good);
+}
+
+.crm-issued {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--status-good-bg);
+    color: var(--status-good);
+    font-weight: 600;
+    margin-top: var(--space-2);
+}
+
+.crm-lead-order {
+    margin: var(--space-3) 0;
+}
+
+.crm-cancel-btn {
+    margin-top: var(--space-6);
+}
+
+.crm-materials-total {
+    text-align: right;
+    padding-right: var(--space-4);
+}
+
+.crm-photo-stage {
+    margin-bottom: var(--space-3);
+}
+
+.crm-photos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+}
+
+.crm-photos__item {
+    position: relative;
+    width: 76px;
+    height: 76px;
+}
+
+.crm-photos__item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    background: var(--card-bg);
+}
+
+.crm-photos__remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: none;
+    background: var(--status-critical);
+    color: #ffffff;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.crm-photos__add {
+    width: 76px;
+    height: 76px;
+    border-radius: var(--radius-sm);
+    border: 1.5px dashed var(--border-color);
+    background: transparent;
+    color: var(--tg-theme-hint-color, #8e8e93);
+    font-size: 26px;
+    cursor: pointer;
+}
+
 .crm-placeholder {
     text-align: center;
     padding: var(--space-6) var(--space-4);

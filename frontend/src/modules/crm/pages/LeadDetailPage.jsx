@@ -22,7 +22,7 @@ export default function LeadDetailPage() {
     const { id } = useParams();
     const api = useApiClient();
     const navigate = useNavigate();
-    const { reference, assignableUsers, userName } = useCrm();
+    const { reference, assignableUsers, userName, can } = useCrm();
 
     const [lead, setLead] = useState(null);
     const [events, setEvents] = useState([]);
@@ -140,6 +140,23 @@ export default function LeadDetailPage() {
                     </a>
                 )}
             </div>
+
+            {lead.order ? (
+                <button type="button" className="btn btn--block crm-lead-order" onClick={() => navigate(`/orders/${lead.order.id}`)}>
+                    {t('order.openOrder', { number: lead.order.number })}
+                </button>
+            ) : (
+                can('orders.manage') &&
+                lead.status !== 'lost' && (
+                    <button
+                        type="button"
+                        className="btn btn--block crm-lead-order"
+                        onClick={() => navigate('/orders/new', { state: { client: lead.client, lead: { id: lead.id } } })}
+                    >
+                        {t('order.createFromLead')}
+                    </button>
+                )
+            )}
 
             <h3 className="crm-section-title">{t('lead.status')}</h3>
             {statusLocked ? (

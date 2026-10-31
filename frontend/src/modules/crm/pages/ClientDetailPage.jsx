@@ -4,7 +4,8 @@ import { useApiClient } from '../../../api/useApiClient';
 import { SkeletonBlocks } from '../../../components/Skeleton';
 import { useCrm } from '../CrmContext';
 import LeadStatusBadge from '../components/LeadStatusBadge';
-import { clientName, formatDate, formatDateTime, formatMoney, formatPhone } from '../format';
+import OrderStatusBadge from '../components/OrderStatusBadge';
+import { clientName, formatDate, formatDateTime, formatMoney, formatPhone, vehicleTitle } from '../format';
 import { t } from '../i18n';
 
 export default function ClientDetailPage() {
@@ -51,6 +52,7 @@ export default function ClientDetailPage() {
     }
 
     const { client, leads, comments, vehicles, orders } = data;
+    const canVehicles = can('vehicles.manage') || can('orders.manage');
     const facts = [
         [t('client.phone'), formatPhone(client.phone)],
         [t('client.instagram'), client.instagram_username && `@${client.instagram_username}`],
@@ -130,32 +132,57 @@ export default function ClientDetailPage() {
                 </ul>
             )}
 
+            {(vehicles.length > 0 || canVehicles) && (
+                <div className="page-header crm-subheader">
+                    <h3>{t('client.vehicles')}</h3>
+                    {canVehicles && (
+                        <button type="button" className="btn btn--ghost" onClick={() => navigate('/vehicles/new', { state: { client } })}>
+                            {t('client.addVehicle')}
+                        </button>
+                    )}
+                </div>
+            )}
             {vehicles.length > 0 && (
-                <>
-                    <h3 className="crm-section-title">{t('client.vehicles')}</h3>
-                    <ul className="list">
-                        {vehicles.map((v) => (
-                            <li key={v.id} className="list-row">
-                                <div className="list-row__title">{[v.make, v.model, v.year].filter(Boolean).join(' ')}</div>
-                                <span className="hint">{[v.plate, v.color].filter(Boolean).join(' · ')}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </>
+                <ul className="list">
+                    {vehicles.map((v) => (
+                        <li key={v.id}>
+                            <Link to={`/vehicles/${v.id}`} className="list-row crm-row">
+                                <div className="crm-row__main">
+                                    <div className="list-row__title">{vehicleTitle(v)}</div>
+                                </div>
+                                {v.plate && <span className="crm-plate">{v.plate}</span>}
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
             )}
 
+            {(orders.length > 0 || can('orders.manage')) && (
+                <div className="page-header crm-subheader">
+                    <h3>{t('client.orders')}</h3>
+                    {can('orders.manage') && (
+                        <button type="button" className="btn btn--ghost" onClick={() => navigate('/orders/new', { state: { client } })}>
+                            {t('client.newOrder')}
+                        </button>
+                    )}
+                </div>
+            )}
             {orders.length > 0 && (
-                <>
-                    <h3 className="crm-section-title">{t('client.orders')}</h3>
-                    <ul className="list">
-                        {orders.map((o) => (
-                            <li key={o.id} className="list-row">
-                                <div className="list-row__title">№{o.number}</div>
-                                <span className="hint">{formatMoney(o.total, o.currency)}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </>
+                <ul className="list">
+                    {orders.map((o) => (
+                        <li key={o.id}>
+                            <Link to={`/orders/${o.id}`} className="list-row crm-row">
+                                <div className="crm-row__main">
+                                    <div className="list-row__title">{t('order.title', { number: o.number })}</div>
+                                    <div className="hint">
+                                        {formatMoney(o.total, o.currency)} · {formatDate(o.issued_at || o.created_at)}
+                                    </div>
+                                </div>
+                                <OrderStatusBadge status={o.status} />
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
             )}
 
             <h3 className="crm-section-title">{t('client.comments')}</h3>

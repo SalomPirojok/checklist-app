@@ -33,6 +33,21 @@ export default function CrmLayout() {
                         {t('nav.clients')}
                     </NavLink>
                 )}
+                {(can('vehicles.manage') || can('orders.manage')) && (
+                    <NavLink to="/vehicles" className={tabClass}>
+                        {t('nav.vehicles')}
+                    </NavLink>
+                )}
+                {(can('orders.manage') || can('payments.record')) && (
+                    <NavLink to="/orders" className={tabClass}>
+                        {t('nav.orders')}
+                    </NavLink>
+                )}
+                {can('staff.manage') && (
+                    <NavLink to="/staff" className={tabClass}>
+                        {t('nav.staff')}
+                    </NavLink>
+                )}
                 {can('settings.manage') && (
                     <NavLink to="/access" className={tabClass}>
                         {t('nav.access')}

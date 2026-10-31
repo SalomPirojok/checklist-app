@@ -5,6 +5,11 @@ export function clientName(client) {
     return [client.first_name, client.last_name].filter(Boolean).join(' ');
 }
 
+export function vehicleTitle(vehicle) {
+    if (!vehicle) return '—';
+    return [vehicle.make, vehicle.model, vehicle.year, vehicle.color].filter(Boolean).join(' ');
+}
+
 export function formatPhone(phone) {
     if (!phone) return '';
     const m = phone.match(/^\+998(\d{2})(\d{3})(\d{2})(\d{2})$/);

@@ -119,16 +119,20 @@ router.get('/:id', async (req, res) => {
     if (error) return sendDbError(res, error, 'Не удалось загрузить заявку');
     if (!lead) return res.status(404).json({ error: 'Заявка не найдена' });
 
-    const [client, events] = await Promise.all([
+    const [client, events, order] = await Promise.all([
         supabase.from('crm_clients').select(CLIENT_LIST_FIELDS).eq('id', lead.client_id).single(),
         supabase
             .from('crm_lead_events')
             .select('id, from_status, to_status, user_id, created_at')
             .eq('lead_id', lead.id)
             .order('created_at'),
+        lead.order_id
+            ? supabase.from('crm_orders').select('id, number, status').eq('id', lead.order_id).single()
+            : { data: null, error: null },
     ]);
-    if (client.error || events.error) return sendDbError(res, client.error || events.error, 'Не удалось загрузить заявку');
-    res.json({ lead: { ...lead, client: client.data }, events: events.data });
+    const failed = [client, events, order].find((r) => r.error);
+    if (failed) return sendDbError(res, failed.error, 'Не удалось загрузить заявку');
+    res.json({ lead: { ...lead, client: client.data, order: order.data }, events: events.data });
 });
 
 // Body: either client_id (existing client) or client: {...} (new client),

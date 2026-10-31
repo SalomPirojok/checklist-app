@@ -6,6 +6,9 @@ import clientsRouter from './routes/clients.js';
 import leadsRouter from './routes/leads.js';
 import referenceRouter from './routes/reference.js';
 import accessRouter from './routes/access.js';
+import staffRouter from './routes/staff.js';
+import vehiclesRouter from './routes/vehicles.js';
+import ordersRouter from './routes/orders.js';
 
 // Every /api/crm route: signed in, CRM enabled for the organization, and the
 // user holds a CRM role (the owner always does). Finer checks live per route.
@@ -21,5 +24,8 @@ router.use('/reference', referenceRouter);
 router.use('/clients', clientsRouter);
 router.use('/leads', leadsRouter);
 router.use('/access', accessRouter);
+router.use('/staff', staffRouter);
+router.use('/vehicles', vehiclesRouter);
+router.use('/orders', ordersRouter);
 
 export default router;

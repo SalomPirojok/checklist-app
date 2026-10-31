@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useApiClient } from '../../api/useApiClient';
 import { useModule } from '../../context/ModuleContext';
@@ -12,6 +12,14 @@ import LeadDetailPage from './pages/LeadDetailPage';
 import ClientsPage from './pages/ClientsPage';
 import ClientFormPage from './pages/ClientFormPage';
 import ClientDetailPage from './pages/ClientDetailPage';
+import VehiclesPage from './pages/VehiclesPage';
+import VehicleFormPage from './pages/VehicleFormPage';
+import VehicleDetailPage from './pages/VehicleDetailPage';
+import OrdersPage from './pages/OrdersPage';
+import OrderNewPage from './pages/OrderNewPage';
+import OrderDetailPage from './pages/OrderDetailPage';
+import StaffPage from './pages/StaffPage';
+import StaffFormPage from './pages/StaffFormPage';
 import AccessPage from './pages/AccessPage';
 import { t } from './i18n';
 import './crm.css';
@@ -22,21 +30,31 @@ export default function CrmApp() {
     const [reference, setReference] = useState(null);
     const [error, setError] = useState(null);
 
+    const reloadReference = useCallback(
+        () =>
+            api('/api/crm/reference')
+                .then(setReference)
+                .catch((err) => setError(err.message)),
+        [api]
+    );
+
     useEffect(() => {
-        api('/api/crm/reference')
-            .then(setReference)
-            .catch((err) => setError(err.message));
-    }, [api]);
+        reloadReference();
+    }, [reloadReference]);
 
     if (error) return <ErrorScreen message={error} />;
     if (!reference) return <LoadingScreen />;
 
     const can = (p) => crmAccess.permissions.includes(p);
     const canSeeClients = can('clients.manage') || can('leads.manage');
-    // Start page: leads if allowed, else clients; roles with neither (e.g.
-    // cashier) get their sections in later stages.
+    const canSeeVehicles = can('vehicles.manage') || can('orders.manage');
+    const canSeeOrders = can('orders.manage') || can('payments.record');
+
+    // Start page: the first section this role can use.
     const home = can('leads.manage') ? (
         <LeadsPage />
+    ) : canSeeOrders ? (
+        <Navigate to="/orders" replace />
     ) : canSeeClients ? (
         <Navigate to="/clients" replace />
     ) : (
@@ -46,7 +64,7 @@ export default function CrmApp() {
     );
 
     return (
-        <CrmProvider access={crmAccess} reference={reference}>
+        <CrmProvider access={crmAccess} reference={reference} reloadReference={reloadReference}>
             <MemoryRouter>
                 <Routes>
                     <Route element={<CrmLayout />}>
@@ -57,6 +75,16 @@ export default function CrmApp() {
                         {canSeeClients && <Route path="/clients/new" element={<ClientFormPage />} />}
                         {canSeeClients && <Route path="/clients/:id" element={<ClientDetailPage />} />}
                         {canSeeClients && <Route path="/clients/:id/edit" element={<ClientFormPage />} />}
+                        {canSeeVehicles && <Route path="/vehicles" element={<VehiclesPage />} />}
+                        {canSeeVehicles && <Route path="/vehicles/new" element={<VehicleFormPage />} />}
+                        {canSeeVehicles && <Route path="/vehicles/:id" element={<VehicleDetailPage />} />}
+                        {canSeeVehicles && <Route path="/vehicles/:id/edit" element={<VehicleFormPage />} />}
+                        {canSeeOrders && <Route path="/orders" element={<OrdersPage />} />}
+                        {can('orders.manage') && <Route path="/orders/new" element={<OrderNewPage />} />}
+                        {canSeeOrders && <Route path="/orders/:id" element={<OrderDetailPage />} />}
+                        {can('staff.manage') && <Route path="/staff" element={<StaffPage />} />}
+                        {can('staff.manage') && <Route path="/staff/new" element={<StaffFormPage />} />}
+                        {can('staff.manage') && <Route path="/staff/:id" element={<StaffFormPage />} />}
                         {can('settings.manage') && <Route path="/access" element={<AccessPage />} />}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
