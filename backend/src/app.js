@@ -12,6 +12,7 @@ import penaltiesRouter from './routes/penalties.js';
 import reportsRouter from './routes/reports.js';
 import scheduleRouter from './routes/schedule.js';
 import platformAdminRouter from './routes/platformAdmin.js';
+import modulesRouter from './routes/modules.js';
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/penalties', penaltiesRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/schedule', scheduleRouter);
 app.use('/api/platform-admin', platformAdminRouter);
+app.use('/api/modules', modulesRouter);
 
 // Catches multer errors (oversized/unsupported file, etc.) and anything else
 // passed to next(err) so clients always get JSON instead of Express's HTML page.

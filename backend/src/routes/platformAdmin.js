@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { requirePlatformAdmin } from '../middleware/requirePlatformAdmin.js';
+import { MODULE_KEYS } from '../lib/modules.js';
+import { writeAuditLog } from '../lib/auditLog.js';
 
 const router = Router();
 
@@ -84,6 +86,66 @@ router.patch('/organizations/:id', async (req, res) => {
     if (error) return res.status(500).json({ error: 'Failed to update organization' });
     if (!data) return res.status(404).json({ error: 'Organization not found' });
     res.json({ organization: data });
+});
+
+router.get('/organizations/:id/modules', async (req, res) => {
+    const { data, error } = await supabase
+        .from('organization_modules')
+        .select('module_key, enabled, settings, updated_at')
+        .eq('organization_id', req.params.id);
+    if (error) return res.status(500).json({ error: 'Failed to load modules' });
+    res.json({ modules: data, available: MODULE_KEYS });
+});
+
+router.put('/organizations/:id/modules/:moduleKey', async (req, res) => {
+    const { moduleKey } = req.params;
+    const { enabled } = req.body || {};
+    if (!MODULE_KEYS.includes(moduleKey)) {
+        return res.status(400).json({ error: `Unknown module. Available: ${MODULE_KEYS.join(', ')}` });
+    }
+    if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+
+    const { data: org, error: orgError } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('id', req.params.id)
+        .maybeSingle();
+    if (orgError) return res.status(500).json({ error: 'Failed to look up organization' });
+    if (!org) return res.status(404).json({ error: 'Organization not found' });
+
+    const { data: before, error: beforeError } = await supabase
+        .from('organization_modules')
+        .select('enabled')
+        .eq('organization_id', org.id)
+        .eq('module_key', moduleKey)
+        .maybeSingle();
+    if (beforeError) return res.status(500).json({ error: 'Failed to load module' });
+
+    const { data, error } = await supabase
+        .from('organization_modules')
+        .upsert(
+            { organization_id: org.id, module_key: moduleKey, enabled, updated_at: new Date().toISOString() },
+            { onConflict: 'organization_id,module_key' }
+        )
+        .select('module_key, enabled, settings, updated_at')
+        .single();
+    if (error) return res.status(500).json({ error: 'Failed to update module' });
+
+    try {
+        await writeAuditLog(req.user, {
+            organizationId: org.id,
+            action: enabled ? 'module.enable' : 'module.disable',
+            entityType: 'organization_module',
+            before: before ? { module_key: moduleKey, enabled: before.enabled } : null,
+            after: { module_key: moduleKey, enabled },
+        });
+    } catch (err) {
+        console.error('Audit log write failed:', err.message);
+    }
+
+    res.json({ module: data });
 });
 
 // Corrects a typo'd username for an owner who hasn't opened the bot yet
@@ -396,6 +458,23 @@ router.delete('/organizations/:id', async (req, res) => {
 
     if (confirm_name !== org.name) {
         return res.status(400).json({ error: 'confirm_name must exactly match the organization name' });
+    }
+
+    // CRM holds clients, orders and the money ledger -- once a module has ever
+    // been switched on (even if later disabled), the org may only be suspended.
+    const { count: moduleCount, error: moduleError } = await supabase
+        .from('organization_modules')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', org.id);
+    // A head/count query on a missing table comes back with count null and no
+    // error -- treat that as "couldn't verify", never as "no modules".
+    if (moduleError || moduleCount === null) {
+        return res.status(500).json({ error: 'Failed to check organization modules' });
+    }
+    if (moduleCount > 0) {
+        return res.status(409).json({
+            error: 'В организации подключались бизнес-модули (CRM) — удаление запрещено, чтобы не потерять финансовую историю. Используйте приостановку.',
+        });
     }
 
     try {
