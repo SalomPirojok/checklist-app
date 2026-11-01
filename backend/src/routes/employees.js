@@ -6,6 +6,8 @@ import { canActOnRole } from '../lib/roles.js';
 import { computeLateness } from '../lib/lateness.js';
 import { resolveScheduleFromShift } from '../lib/schedule.js';
 import { getOrgTemplateIds } from '../lib/orgTemplates.js';
+import { getOrgTimezone } from '../lib/orgTimezone.js';
+import { localDateString } from '../lib/time.js';
 
 const router = Router();
 
@@ -133,12 +135,18 @@ router.get('/:id/profile', async (req, res) => {
     if (shiftsError) return res.status(500).json({ error: 'Failed to load shift schedule' });
     const shiftByDate = new Map(shiftsInPeriod.map((s) => [s.shift_date, s]));
 
+    let timeZone = 'Asia/Tashkent';
+    try {
+        timeZone = await getOrgTimezone(req.user.organizationId);
+    } catch {
+        // Default zone; the profile still renders.
+    }
     const checkIns = attendanceRecords.filter((r) => r.type === 'check_in');
     const lateCheckIns = checkIns.filter((r) => {
         const checkInAt = new Date(r.created_at);
-        const dateStr = checkInAt.toISOString().slice(0, 10);
+        const dateStr = localDateString(checkInAt, timeZone);
         const schedule = resolveScheduleFromShift(shiftByDate.get(dateStr));
-        return computeLateness(checkInAt, schedule).isLate;
+        return computeLateness(checkInAt, schedule, timeZone).isLate;
     });
 
     const penaltiesTotal = penaltyRows.reduce((sum, p) => sum + Number(p.amount), 0);

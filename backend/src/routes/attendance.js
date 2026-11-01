@@ -7,6 +7,8 @@ import { uploadAttendancePhoto, verifyAttendancePhotoBelongsToUser } from '../li
 import { computeLateness } from '../lib/lateness.js';
 import { resolveScheduleForShiftDate } from '../lib/schedule.js';
 import { sendTelegramMessage } from '../lib/telegramNotify.js';
+import { getOrgTimezone } from '../lib/orgTimezone.js';
+import { localDateString } from '../lib/time.js';
 
 const router = Router();
 
@@ -137,14 +139,21 @@ router.post('/', upload.single('photo'), async (req, res) => {
     if (employeeError) console.error('Failed to load employee for attendance side-effects:', employeeError.message);
 
     let schedule = null;
+    let timeZone = 'Asia/Tashkent';
     if (org) {
-        const dateStr = new Date(record.created_at).toISOString().slice(0, 10);
+        try {
+            timeZone = await getOrgTimezone(req.user.organizationId);
+        } catch (err) {
+            console.error('Failed to load organization timezone:', err.message);
+        }
+        // The shift is planned for the local calendar day, not the UTC one.
+        const dateStr = localDateString(new Date(record.created_at), timeZone);
         schedule = await resolveScheduleForShiftDate(req.user.id, dateStr);
     }
 
     if (type === 'check_in' && org && schedule) {
         try {
-            await maybeCreateLatePenalty(record, req.user.organizationId, org, schedule);
+            await maybeCreateLatePenalty(record, req.user.organizationId, org, schedule, timeZone);
         } catch (err) {
             // Best-effort: a failed penalty check must never block the check-in itself.
             console.error('Auto-penalty check failed:', err.message);
@@ -152,7 +161,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
     }
 
     try {
-        await notifyOwnerOfAttendance(record, req.user, type, employee, schedule);
+        await notifyOwnerOfAttendance(record, req.user, type, employee, schedule, timeZone);
     } catch (err) {
         console.error('Failed to notify owner of attendance:', err.message);
     }
@@ -160,10 +169,10 @@ router.post('/', upload.single('photo'), async (req, res) => {
     res.status(201).json({ record });
 });
 
-async function maybeCreateLatePenalty(attendanceRecord, organizationId, org, schedule) {
+async function maybeCreateLatePenalty(attendanceRecord, organizationId, org, schedule, timeZone) {
     if (!org.auto_penalty_enabled) return;
 
-    const { lateMinutes } = computeLateness(new Date(attendanceRecord.created_at), schedule);
+    const { lateMinutes } = computeLateness(new Date(attendanceRecord.created_at), schedule, timeZone);
     const thresholdMinutes = org.late_threshold_minutes;
     if (lateMinutes <= thresholdMinutes) return;
 
@@ -181,7 +190,7 @@ async function maybeCreateLatePenalty(attendanceRecord, organizationId, org, sch
 
 // Instant "employee checked in/out" ping to the owner, using the same
 // Telegram-sending infrastructure as the overdue notifier.
-async function notifyOwnerOfAttendance(record, user, type, employee, schedule) {
+async function notifyOwnerOfAttendance(record, user, type, employee, schedule, timeZone) {
     const botToken = process.env.BOT_TOKEN;
     if (!botToken || !employee) return;
 
@@ -196,14 +205,14 @@ async function notifyOwnerOfAttendance(record, user, type, employee, schedule) {
     const time = new Date(record.created_at).toLocaleTimeString('ru-RU', {
         hour: '2-digit',
         minute: '2-digit',
-        timeZone: 'UTC',
+        timeZone,
     });
 
     let text;
     if (type === 'check_in') {
         const lateSuffix = schedule
             ? (() => {
-                  const { isLate, lateMinutes } = computeLateness(new Date(record.created_at), schedule);
+                  const { isLate, lateMinutes } = computeLateness(new Date(record.created_at), schedule, timeZone);
                   return isLate ? `опоздание на ${lateMinutes} мин` : 'вовремя';
               })()
             : 'вовремя';

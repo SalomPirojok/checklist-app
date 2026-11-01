@@ -2,6 +2,7 @@ import { supabase } from './supabase.js';
 import { computeLateness } from './lateness.js';
 import { resolveScheduleFromShift } from './schedule.js';
 import { getOrgTemplateIds } from './orgTemplates.js';
+import { getOrgTimezone } from './orgTimezone.js';
 
 function startOfDayUTC(date) {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString();
@@ -16,6 +17,8 @@ function endOfDayUTC(date) {
 export async function buildDailyReport(organizationId, day) {
     const dayStart = startOfDayUTC(day);
     const dayEnd = endOfDayUTC(day);
+    // Lateness compares against shift times on the local wall clock.
+    const timeZone = await getOrgTimezone(organizationId);
 
     const { data: orgUsers, error: usersError } = await supabase
         .from('users')
@@ -75,7 +78,7 @@ export async function buildDailyReport(organizationId, day) {
         const recs = attendanceByUser.get(u.id) || {};
         let checkIn = null;
         if (recs.check_in) {
-            const { isLate, lateMinutes } = computeLateness(new Date(recs.check_in.created_at), scheduleForUser(u));
+            const { isLate, lateMinutes } = computeLateness(new Date(recs.check_in.created_at), scheduleForUser(u), timeZone);
             checkIn = { time: recs.check_in.created_at, isLate, lateMinutes };
         }
         return {

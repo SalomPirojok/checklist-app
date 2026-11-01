@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { getOrgTimezone } from '../lib/orgTimezone.js';
+import { localDateString } from '../lib/time.js';
 
 const router = Router();
 
@@ -47,7 +49,13 @@ function validateShiftInput(body) {
 // ever exposes the caller's own row (used next to the check-in button so an
 // employee knows what time they're expected).
 router.get('/my-shift-today', async (req, res) => {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    let timeZone = 'Asia/Tashkent';
+    try {
+        timeZone = await getOrgTimezone(req.user.organizationId);
+    } catch {
+        // Fall back to the default zone rather than failing the check-in screen.
+    }
+    const todayStr = localDateString(new Date(), timeZone);
     const { data: shift, error } = await supabase
         .from('schedule_shifts')
         .select('status, start_time, end_time')
