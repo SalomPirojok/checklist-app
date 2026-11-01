@@ -1,12 +1,12 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import { supabase } from '../../../lib/supabase.js';
-import { periodRange, zonedMidnight } from '../../../lib/time.js';
 import { requirePermission } from '../middleware.js';
 import { crmAudit } from '../lib/audit.js';
 import { sendDbError } from '../lib/dbErrors.js';
 import { getRate } from '../lib/fx.js';
 import { cleanText } from '../lib/normalize.js';
+import { resolvePeriod } from '../lib/period.js';
 import { cashFlow, categoryBreakdown, profitAndLoss } from '../lib/report.js';
 import { localDateString } from '../../../lib/time.js';
 
@@ -19,7 +19,6 @@ const ACCOUNT_KINDS = ['cash', 'bank_transfer', 'card', 'other'];
 const EXPENSE_KINDS = ['opex', 'marketing', 'materials'];
 const CURRENCIES = ['UZS', 'USD'];
 const TX_FIELDS = 'id, type, direction, account_id, amount, currency, fx_rate, amount_base, occurred_at, order_id, order_amount, client_id, staff_id, category_id, campaign_id, transfer_group_id, reversal_of, note, created_by, created_at';
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function positive(value, field) {
     const n = Number(value);
@@ -32,27 +31,6 @@ function isoOrNow(value) {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) throw new Error('Неверная дата');
     return d.toISOString();
-}
-
-async function orgTimezone(orgId) {
-    const { data, error } = await supabase.from('organizations').select('timezone').eq('id', orgId).single();
-    if (error) throw new Error(error.message);
-    return data.timezone || 'Asia/Tashkent';
-}
-
-// ?from=YYYY-MM-DD&to=YYYY-MM-DD (inclusive, local calendar), default: this month.
-async function resolvePeriod(req) {
-    const tz = await orgTimezone(req.user.organizationId);
-    const { from, to } = req.query;
-    if (from || to) {
-        if (!DATE.test(from || '') || !DATE.test(to || '') || from > to) throw new Error('Неверный период');
-        const [y, m, d] = to.split('-').map(Number);
-        const dayAfter = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
-        return { tz, startDate: from, endDate: to, from: zonedMidnight(from, tz).toISOString(), to: zonedMidnight(dayAfter, tz).toISOString() };
-    }
-    const month = periodRange('month', new Date(), tz);
-    const [y, m, d] = month.endDate.split('-').map(Number);
-    return { tz, ...month, endDate: new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10) };
 }
 
 async function accountOf(orgId, accountId) {

@@ -5,6 +5,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { hapticSuccess } from '../../../lib/haptics';
 import { useCrm } from '../CrmContext';
 import ClientFields, { emptyClient } from '../components/ClientFields';
+import CampaignSelect from '../components/CampaignSelect';
 import FoundClientCard from '../components/FoundClientCard';
 import { fromLocalInputValue } from '../format';
 import { CHANNELS, t } from '../i18n';
@@ -23,6 +24,7 @@ export default function LeadNewPage() {
     const [lead, setLead] = useState({
         channel: 'instagram',
         source_id: '',
+        campaign_id: '',
         manager_id: user.id,
         booked_for: '',
         notes: '',
@@ -52,6 +54,7 @@ export default function LeadNewPage() {
         const body = {
             channel: lead.channel,
             source_id: lead.source_id || null,
+            campaign_id: lead.campaign_id || null,
             manager_id: lead.manager_id || null,
             notes: lead.notes,
             booked_for: fromLocalInputValue(lead.booked_for),
@@ -122,7 +125,7 @@ export default function LeadNewPage() {
                     </label>
                     <label className="field">
                         <span>{t('lead.source')}</span>
-                        <select value={lead.source_id} onChange={setLeadField('source_id')}>
+                        <select value={lead.source_id} onChange={(e) => setLead({ ...lead, source_id: e.target.value, campaign_id: '' })}>
                             <option value="">{t('common.notSet')}</option>
                             {reference.sources.map((s) => (
                                 <option key={s.id} value={s.id}>
@@ -132,6 +135,7 @@ export default function LeadNewPage() {
                         </select>
                     </label>
                 </div>
+                <CampaignSelect sourceId={lead.source_id} value={lead.campaign_id} onChange={(v) => setLead({ ...lead, campaign_id: v })} />
                 <label className="field">
                     <span>{t('lead.manager')}</span>
                     <select value={lead.manager_id} onChange={setLeadField('manager_id')}>

@@ -533,6 +533,56 @@
     }
 }
 
+.crm-serious {
+    color: var(--status-serious);
+}
+
+.crm-tile-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+@media (min-width: 600px) {
+    .crm-kpis--3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.crm-funnel {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-1);
+    padding: var(--space-3);
+    text-align: center;
+}
+
+.crm-funnel > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.crm-funnel strong {
+    font-size: var(--font-size-lg);
+}
+
+.crm-funnel .hint {
+    font-size: var(--font-size-xs);
+}
+
+.crm-mkt-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+}
+
+.crm-mkt-row__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-2);
+}
+
 .crm-placeholder {
     text-align: center;
     padding: var(--space-6) var(--space-4);

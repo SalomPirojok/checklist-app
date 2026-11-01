@@ -23,8 +23,13 @@ export default function CrmLayout() {
             </header>
 
             <nav className="tab-bar">
-                {can('leads.manage') && (
+                {can('dashboard.view') && (
                     <NavLink to="/" end className={tabClass}>
+                        {t('nav.dashboard')}
+                    </NavLink>
+                )}
+                {can('leads.manage') && (
+                    <NavLink to="/leads" className={tabClass}>
                         {t('nav.leads')}
                     </NavLink>
                 )}
@@ -51,6 +56,11 @@ export default function CrmLayout() {
                 {can('payroll.view') && (
                     <NavLink to="/payroll" className={tabClass}>
                         {t('nav.payroll')}
+                    </NavLink>
+                )}
+                {can('marketing.view') && (
+                    <NavLink to="/marketing" className={tabClass}>
+                        {t('nav.marketing')}
                     </NavLink>
                 )}
                 {can('staff.manage') && (

@@ -27,6 +27,8 @@ import FinanceSettingsPage from './pages/FinanceSettingsPage';
 import PayrollPage from './pages/PayrollPage';
 import PayrollStaffPage from './pages/PayrollStaffPage';
 import CommissionRulesPage from './pages/CommissionRulesPage';
+import DashboardPage from './pages/DashboardPage';
+import MarketingPage from './pages/MarketingPage';
 import { t } from './i18n';
 import './crm.css';
 
@@ -57,8 +59,10 @@ export default function CrmApp() {
     const canSeeOrders = can('orders.manage') || can('payments.record');
 
     // Start page: the first section this role can use.
-    const home = can('leads.manage') ? (
-        <LeadsPage />
+    const home = can('dashboard.view') ? (
+        <DashboardPage />
+    ) : can('leads.manage') ? (
+        <Navigate to="/leads" replace />
     ) : canSeeOrders ? (
         <Navigate to="/orders" replace />
     ) : canSeeClients ? (
@@ -79,7 +83,9 @@ export default function CrmApp() {
                 <Routes>
                     <Route element={<CrmLayout />}>
                         <Route path="/" element={home} />
+                        {can('leads.manage') && <Route path="/leads" element={<LeadsPage />} />}
                         {can('leads.manage') && <Route path="/leads/new" element={<LeadNewPage />} />}
+                        {can('marketing.view') && <Route path="/marketing" element={<MarketingPage />} />}
                         {can('leads.manage') && <Route path="/leads/:id" element={<LeadDetailPage />} />}
                         {canSeeClients && <Route path="/clients" element={<ClientsPage />} />}
                         {canSeeClients && <Route path="/clients/new" element={<ClientFormPage />} />}

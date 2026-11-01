@@ -4,6 +4,7 @@ import { useApiClient } from '../../../api/useApiClient';
 import { SkeletonBlocks } from '../../../components/Skeleton';
 import { hapticSelect, hapticSuccess } from '../../../lib/haptics';
 import { useCrm } from '../CrmContext';
+import CampaignSelect from '../components/CampaignSelect';
 import LeadStatusBadge from '../components/LeadStatusBadge';
 import { clientName, formatDateTime, formatPhone, fromLocalInputValue, toLocalInputValue } from '../format';
 import { CHANNELS, MANUAL_LEAD_STATUSES, t } from '../i18n';
@@ -12,6 +13,7 @@ function draftFrom(lead) {
     return {
         channel: lead.channel,
         source_id: lead.source_id || '',
+        campaign_id: lead.campaign_id || '',
         manager_id: lead.manager_id || '',
         booked_for: toLocalInputValue(lead.booked_for),
         notes: lead.notes || '',
@@ -82,6 +84,7 @@ export default function LeadDetailPage() {
         const ok = await patch({
             channel: draft.channel,
             source_id: draft.source_id || null,
+            campaign_id: draft.campaign_id || null,
             manager_id: draft.manager_id || null,
             booked_for: fromLocalInputValue(draft.booked_for),
             notes: draft.notes,
@@ -225,7 +228,7 @@ export default function LeadDetailPage() {
                     </label>
                     <label className="field">
                         <span>{t('lead.source')}</span>
-                        <select value={draft.source_id} onChange={setField('source_id')}>
+                        <select value={draft.source_id} onChange={(e) => setDraft({ ...draft, source_id: e.target.value, campaign_id: '' })}>
                             <option value="">{t('common.notSet')}</option>
                             {reference.sources.map((s) => (
                                 <option key={s.id} value={s.id}>
@@ -235,6 +238,7 @@ export default function LeadDetailPage() {
                         </select>
                     </label>
                 </div>
+                <CampaignSelect sourceId={draft.source_id} value={draft.campaign_id} onChange={(v) => setDraft({ ...draft, campaign_id: v })} />
                 <label className="field">
                     <span>{t('lead.manager')}</span>
                     <select value={draft.manager_id} onChange={setField('manager_id')}>
