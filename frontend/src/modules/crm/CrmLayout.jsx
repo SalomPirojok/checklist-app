@@ -68,11 +68,9 @@ export default function CrmLayout() {
                         {t('nav.staff')}
                     </NavLink>
                 )}
-                {can('settings.manage') && (
-                    <NavLink to="/access" className={tabClass}>
-                        {t('nav.access')}
-                    </NavLink>
-                )}
+                <NavLink to="/settings" className={tabClass}>
+                    {t('nav.settings')}
+                </NavLink>
             </nav>
 
             <main className="app-main crm-main">

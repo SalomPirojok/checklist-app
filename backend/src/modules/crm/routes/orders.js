@@ -6,6 +6,8 @@ import { sendDbError } from '../lib/dbErrors.js';
 import { photoUpload, removePhoto, uploadPhoto, withSignedUrls } from '../lib/files.js';
 import { getRate } from '../lib/fx.js';
 import { cleanText, searchTerm } from '../lib/normalize.js';
+import { notifyLater, orderContext } from '../lib/notify.js';
+import { debtText, orderIssuedText, orderNewText, orderStatusText, paymentText } from '../lib/notifyText.js';
 import { localDateString } from '../../../lib/time.js';
 
 const router = Router();
@@ -284,6 +286,11 @@ router.post('/', canEdit, async (req, res) => {
     }
     await crmAudit(req, 'crm.order.create', 'crm_order', created.id, null, created);
     res.status(201).json({ order: created });
+
+    notifyLater(orgId, 'order_new', async () => ({
+        text: orderNewText({ order: created, ...(await orderContext(created)) }),
+        link: `orders/${created.id}`,
+    }));
 });
 
 router.patch('/:id', canEdit, async (req, res) => {
@@ -343,6 +350,13 @@ router.patch('/:id', canEdit, async (req, res) => {
     }
     await crmAudit(req, 'crm.order.update', 'crm_order', data.id, before, data);
     res.json({ order: data });
+
+    if (data.status !== before.status) {
+        notifyLater(req.user.organizationId, data.status === 'ready' ? 'order_ready' : 'order_status', async () => ({
+            text: orderStatusText({ order: data, fromStatus: before.status, ...(await orderContext(data)) }),
+            link: `orders/${data.id}`,
+        }));
+    }
 });
 
 // ---------------------------------------------------------------------------
@@ -569,6 +583,11 @@ router.post('/:id/payments', requirePermission('payments.record'), async (req, r
     if (error) return sendDbError(res, error, 'Не удалось провести оплату');
     await crmAudit(req, kind === 'refund' ? 'crm.order.refund' : 'crm.order.payment', 'crm_order', order.id, null, data);
     res.status(201).json({ transaction: data });
+
+    notifyLater(req.user.organizationId, 'payment', async () => {
+        const { data: updated } = await supabase.from('crm_orders').select(ORDER_FIELDS).eq('id', order.id).single();
+        return { text: paymentText({ order: updated, transaction: data, ...(await orderContext(updated)) }), link: `orders/${order.id}` };
+    });
 });
 
 router.post('/:id/payments/:txId/reverse', requirePermission('finance.manage'), async (req, res) => {
@@ -612,6 +631,18 @@ router.post('/:id/issue', requirePermission('orders.issue'), async (req, res) =>
     if (error) return sendDbError(res, error, 'Не удалось выдать заказ');
     await crmAudit(req, 'crm.order.issue', 'crm_order', order.id, order, data);
     res.json({ order: data });
+
+    const orgId = req.user.organizationId;
+    notifyLater(orgId, 'order_status', async () => ({
+        text: orderIssuedText({ order: data, ...(await orderContext(data)) }),
+        link: `orders/${data.id}`,
+    }));
+    if (Number(data.total) > Number(data.paid_amount)) {
+        notifyLater(orgId, 'client_debt', async () => ({
+            text: debtText({ order: data, ...(await orderContext(data)) }),
+            link: `orders/${data.id}`,
+        }));
+    }
 });
 
 router.post('/:id/reopen', requirePermission('orders.issue'), async (req, res) => {

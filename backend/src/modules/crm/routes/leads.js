@@ -5,6 +5,8 @@ import { requirePermission } from '../middleware.js';
 import { CLIENT_LIST_FIELDS, duplicateResponse, findDuplicateClient, parseClientInput } from '../lib/clients.js';
 import { sendDbError } from '../lib/dbErrors.js';
 import { cleanText, searchTerm } from '../lib/normalize.js';
+import { notifyLater } from '../lib/notify.js';
+import { leadBookedText, leadNewText } from '../lib/notifyText.js';
 
 const router = Router();
 
@@ -33,6 +35,14 @@ async function audit(req, action, entityType, entityId, before, after) {
     } catch (err) {
         console.error('Audit log write failed:', err.message);
     }
+}
+
+async function leadContext(lead) {
+    const [client, source] = await Promise.all([
+        supabase.from('crm_clients').select('first_name, last_name, phone, instagram_username').eq('id', lead.client_id).single(),
+        lead.source_id ? supabase.from('crm_sources').select('name').eq('id', lead.source_id).single() : { data: null },
+    ]);
+    return { client: client.data, sourceName: source.data?.name || null };
 }
 
 function parseIsoDate(value) {
@@ -222,6 +232,17 @@ router.post('/', async (req, res) => {
     if (createdClient) await audit(req, 'crm.client.create', 'crm_client', createdClient.id, null, createdClient);
     await audit(req, 'crm.lead.create', 'crm_lead', created.id, null, created);
     res.status(201).json({ lead: created, client: createdClient });
+
+    notifyLater(orgId, 'lead_new', async () => {
+        const { client, sourceName } = await leadContext(created);
+        return { text: leadNewText({ lead: created, client, sourceName }), link: `leads/${created.id}` };
+    });
+    if (created.status === 'booked') {
+        notifyLater(orgId, 'lead_booked', async () => {
+            const { client } = await leadContext(created);
+            return { text: leadBookedText({ lead: created, client }), link: `leads/${created.id}` };
+        });
+    }
 });
 
 router.patch('/:id', async (req, res) => {
@@ -279,6 +300,14 @@ router.patch('/:id', async (req, res) => {
     if (error) return sendDbError(res, error, 'Не удалось сохранить заявку');
     await audit(req, 'crm.lead.update', 'crm_lead', data.id, before, data);
     res.json({ lead: data });
+
+    // A new booking, or the booked time moved.
+    if (data.status === 'booked' && (before.status !== 'booked' || data.booked_for !== before.booked_for)) {
+        notifyLater(req.user.organizationId, 'lead_booked', async () => {
+            const { client } = await leadContext(data);
+            return { text: leadBookedText({ lead: data, client }), link: `leads/${data.id}` };
+        });
+    }
 });
 
 export default router;

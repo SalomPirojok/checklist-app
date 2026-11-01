@@ -13,6 +13,26 @@ function readStoredModule() {
     }
 }
 
+// "?crm=orders/<uuid>" comes from the "Открыть в CRM" button in a bot
+// notification. Read once, then removed from the address so a reload
+// doesn't reopen it.
+function readDeepLink() {
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const value = params.get('crm');
+        if (!value) return null;
+        params.delete('crm');
+        const query = params.toString();
+        window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+        return /^(orders|leads|clients|vehicles)\/[0-9a-f-]{36}$/.test(value) ? value : null;
+    } catch {
+        return null;
+    }
+}
+
+// Module load = app start, before anything else can touch the address.
+const initialDeepLink = readDeepLink();
+
 // Which top-level module the user is in ("kontrolla" checklists/staff, or
 // "crm"). CRM is offered only when the organization has it enabled AND the
 // user holds a CRM role; the server enforces both on every request anyway.
@@ -20,7 +40,8 @@ export function ModuleProvider({ children }) {
     const api = useApiClient();
     const [crmAccess, setCrmAccess] = useState(null);
     const [ready, setReady] = useState(false);
-    const [mode, setModeState] = useState(readStoredModule);
+    const deepLink = initialDeepLink;
+    const [mode, setModeState] = useState(() => (deepLink ? 'crm' : readStoredModule()));
 
     useEffect(() => {
         let cancelled = false;
@@ -55,7 +76,7 @@ export function ModuleProvider({ children }) {
     const activeMode = mode === 'crm' && crmAccess ? 'crm' : 'kontrolla';
 
     return (
-        <ModuleContext.Provider value={{ ready, crmAccess, mode: activeMode, setMode }}>
+        <ModuleContext.Provider value={{ ready, crmAccess, mode: activeMode, setMode, deepLink }}>
             {children}
         </ModuleContext.Provider>
     );

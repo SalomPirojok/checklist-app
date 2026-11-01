@@ -29,12 +29,16 @@ import PayrollStaffPage from './pages/PayrollStaffPage';
 import CommissionRulesPage from './pages/CommissionRulesPage';
 import DashboardPage from './pages/DashboardPage';
 import MarketingPage from './pages/MarketingPage';
+import NotificationsPage from './pages/NotificationsPage';
+import SettingsPage from './pages/SettingsPage';
 import { t } from './i18n';
 import './crm.css';
 
 export default function CrmApp() {
     const api = useApiClient();
-    const { crmAccess } = useModule();
+    const { crmAccess, deepLink } = useModule();
+    // Read once: the screen a notification button asked to open.
+    const [initialPath] = useState(() => (deepLink ? `/${deepLink}` : null));
     const [reference, setReference] = useState(null);
     const [error, setError] = useState(null);
 
@@ -79,7 +83,7 @@ export default function CrmApp() {
 
     return (
         <CrmProvider access={crmAccess} reference={reference} reloadReference={reloadReference}>
-            <MemoryRouter>
+            <MemoryRouter initialEntries={[initialPath || '/']}>
                 <Routes>
                     <Route element={<CrmLayout />}>
                         <Route path="/" element={home} />
@@ -108,6 +112,8 @@ export default function CrmApp() {
                         {can('payroll.view') && <Route path="/payroll/rules" element={<CommissionRulesPage />} />}
                         {can('payroll.view') && <Route path="/payroll/:staffId" element={<PayrollStaffPage />} />}
                         {can('settings.manage') && <Route path="/access" element={<AccessPage />} />}
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/notifications" element={<NotificationsPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 </Routes>

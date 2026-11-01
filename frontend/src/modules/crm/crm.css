@@ -583,6 +583,18 @@
     gap: var(--space-2);
 }
 
+.crm-toggle {
+    cursor: pointer;
+    flex-wrap: nowrap;
+}
+
+.crm-toggle input[type='checkbox'] {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    accent-color: var(--tg-theme-button-color, #2481cc);
+}
+
 .crm-placeholder {
     text-align: center;
     padding: var(--space-6) var(--space-4);

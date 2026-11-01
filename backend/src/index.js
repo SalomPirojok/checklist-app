@@ -3,6 +3,7 @@ import app from './app.js';
 import { runOverdueCheck } from './jobs/overdueNotifier.js';
 import { runAutoAssignChecklists } from './jobs/autoAssignChecklists.js';
 import { runDailyReportCheck } from './jobs/dailyReportNotifier.js';
+import { runCrmDailySummary } from './jobs/crmDailySummary.js';
 
 const port = process.env.PORT || 3000;
 const OVERDUE_CHECK_INTERVAL_MS = Number(process.env.OVERDUE_CHECK_INTERVAL_MS) || 5 * 60 * 1000;
@@ -60,9 +61,23 @@ function scheduleDailyReportChecks() {
     setInterval(tick, DAILY_REPORT_CHECK_INTERVAL_MS);
 }
 
+function scheduleCrmDailySummary() {
+    if (!process.env.BOT_TOKEN) return;
+    const tick = () => {
+        runCrmDailySummary()
+            .then(({ sent }) => {
+                if (sent) console.log(`CRM daily summary: sent ${sent} message(s)`);
+            })
+            .catch((err) => console.error('CRM daily summary failed:', err.message));
+    };
+    tick();
+    setInterval(tick, DAILY_REPORT_CHECK_INTERVAL_MS);
+}
+
 app.listen(port, () => {
     console.log(`Backend listening on port ${port}`);
     scheduleOverdueChecks();
     scheduleAutoAssignChecklists();
     scheduleDailyReportChecks();
+    scheduleCrmDailySummary();
 });
