@@ -22,3 +22,9 @@ services:
         sync: false
       - key: OVERDUE_CHECK_INTERVAL_MS
         value: "300000"
+      - key: CRM_ENCRYPTION_KEY
+        generateValue: true
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_VERIFY_TOKEN
+        sync: false

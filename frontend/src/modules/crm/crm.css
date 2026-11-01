@@ -595,6 +595,95 @@
     accent-color: var(--tg-theme-button-color, #2481cc);
 }
 
+.crm-steps {
+    padding-left: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.crm-code {
+    display: block;
+    margin-top: var(--space-1);
+    padding: var(--space-2);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    font-size: var(--font-size-sm);
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.crm-chat__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    max-height: 420px;
+    overflow-y: auto;
+    padding: var(--space-2) 0;
+}
+
+.crm-bubble {
+    max-width: 82%;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    align-self: flex-start;
+}
+
+.crm-bubble--out {
+    align-self: flex-end;
+    background: color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 14%, transparent);
+}
+
+.crm-bubble--failed {
+    border-color: var(--status-critical);
+}
+
+.crm-bubble__text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.crm-bubble__image {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: var(--radius-sm);
+    display: block;
+    margin-top: var(--space-1);
+}
+
+.crm-bubble__meta {
+    font-size: var(--font-size-xs);
+    color: var(--tg-theme-hint-color, #8e8e93);
+    margin-top: 2px;
+}
+
+.crm-bubble__error {
+    font-size: var(--font-size-xs);
+    color: var(--status-critical);
+}
+
+.crm-chat__form {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-end;
+    margin-top: var(--space-2);
+}
+
+.crm-chat__form textarea {
+    flex: 1;
+    font: inherit;
+    font-size: var(--font-size-base);
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #0f172a);
+    resize: vertical;
+}
+
 .crm-placeholder {
     text-align: center;
     padding: var(--space-6) var(--space-4);

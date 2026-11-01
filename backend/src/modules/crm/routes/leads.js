@@ -20,7 +20,7 @@ const SYSTEM_STATUSES = ['order_created', 'completed'];
 const CHANNELS = ['instagram', 'telegram', 'phone', 'walk_in', 'website', 'other'];
 const CLOSED_STATUSES = ['completed', 'lost'];
 
-const LEAD_FIELDS = 'id, number, client_id, source_id, campaign_id, channel, status, lost_reason, manager_id, booked_for, arrived_at, closed_at, order_id, notes, created_at, updated_at';
+const LEAD_FIELDS = 'id, number, client_id, source_id, campaign_id, channel, status, lost_reason, manager_id, booked_for, arrived_at, closed_at, order_id, notes, external_ad_id, referral, created_at, updated_at';
 
 async function audit(req, action, entityType, entityId, before, after) {
     try {

@@ -31,6 +31,7 @@ import DashboardPage from './pages/DashboardPage';
 import MarketingPage from './pages/MarketingPage';
 import NotificationsPage from './pages/NotificationsPage';
 import SettingsPage from './pages/SettingsPage';
+import InstagramSettingsPage from './pages/InstagramSettingsPage';
 import { t } from './i18n';
 import './crm.css';
 
@@ -113,6 +114,7 @@ export default function CrmApp() {
                         {can('payroll.view') && <Route path="/payroll/:staffId" element={<PayrollStaffPage />} />}
                         {can('settings.manage') && <Route path="/access" element={<AccessPage />} />}
                         <Route path="/settings" element={<SettingsPage />} />
+                        {can('settings.manage') && <Route path="/settings/instagram" element={<InstagramSettingsPage />} />}
                         <Route path="/notifications" element={<NotificationsPage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>

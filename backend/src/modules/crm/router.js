@@ -14,6 +14,8 @@ import payrollRouter from './routes/payroll.js';
 import marketingRouter from './routes/marketing.js';
 import dashboardRouter from './routes/dashboard.js';
 import notificationsRouter from './routes/notifications.js';
+import integrationsRouter from './routes/integrations.js';
+import messagesRouter from './routes/messages.js';
 
 // Every /api/crm route: signed in, CRM enabled for the organization, and the
 // user holds a CRM role (the owner always does). Finer checks live per route.
@@ -37,5 +39,7 @@ router.use('/payroll', payrollRouter);
 router.use('/marketing', marketingRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/notifications', notificationsRouter);
+router.use('/integrations', integrationsRouter);
+router.use('/messages', messagesRouter);
 
 export default router;

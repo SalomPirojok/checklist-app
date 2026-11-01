@@ -2,6 +2,7 @@
 
 export const NOTIFICATION_EVENTS = [
     'lead_new',
+    'message_new',
     'lead_booked',
     'order_new',
     'order_status',
@@ -55,6 +56,11 @@ export function leadNewText({ lead, client, sourceName }) {
         [CHANNEL[lead.channel], sourceName].filter(Boolean).join(' · '),
         lead.notes && `«${lead.notes}»`
     );
+}
+
+export function messageNewText({ client, text, attachments = [] }) {
+    const body = text ? (text.length > 300 ? `${text.slice(0, 300)}…` : text) : attachments.length ? `[вложение: ${attachments.map((a) => a.type).join(', ')}]` : '';
+    return lines(`💬 ${name(client)}${client?.instagram_username ? ` (@${client.instagram_username})` : ''}`, body);
 }
 
 export function leadBookedText({ lead, client }) {

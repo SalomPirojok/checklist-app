@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useApiClient } from '../../../api/useApiClient';
 import { SkeletonBlocks } from '../../../components/Skeleton';
 import { useCrm } from '../CrmContext';
+import ChatThread from '../components/ChatThread';
 import LeadStatusBadge from '../components/LeadStatusBadge';
 import OrderStatusBadge from '../components/OrderStatusBadge';
 import { clientName, formatDate, formatDateTime, formatMoney, formatPhone, vehicleTitle } from '../format';
@@ -102,6 +103,8 @@ export default function ClientDetailPage() {
             </div>
 
             {error && <p className="error-text">{error}</p>}
+
+            <ChatThread client={client} />
 
             <div className="page-header crm-subheader">
                 <h3>{t('client.leads')}</h3>

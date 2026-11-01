@@ -14,6 +14,7 @@ import scheduleRouter from './routes/schedule.js';
 import platformAdminRouter from './routes/platformAdmin.js';
 import modulesRouter from './routes/modules.js';
 import crmRouter from './modules/crm/router.js';
+import instagramWebhookRouter from './routes/instagramWebhook.js';
 
 const app = express();
 
@@ -21,6 +22,8 @@ const app = express();
 // left unset, it falls back to allowing any origin (fine for local dev).
 const allowedOrigin = process.env.FRONTEND_ORIGIN;
 app.use(cors(allowedOrigin ? { origin: allowedOrigin } : {}));
+// Before express.json(): signature verification needs the exact raw body.
+app.use('/api/webhooks/instagram', instagramWebhookRouter);
 app.use(express.json());
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

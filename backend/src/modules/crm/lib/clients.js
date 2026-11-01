@@ -1,7 +1,7 @@
 import { supabase } from '../../../lib/supabase.js';
 import { cleanText, normalizeInstagram, normalizePhone, normalizeTelegram } from './normalize.js';
 
-export const CLIENT_LIST_FIELDS = 'id, first_name, last_name, phone, instagram_username, telegram_username, source_id, manager_id, first_contact_at, created_at';
+export const CLIENT_LIST_FIELDS = 'id, first_name, last_name, phone, instagram_username, instagram_user_id, telegram_username, source_id, manager_id, first_contact_at, created_at';
 
 // Validates and normalizes client fields from a request body. Only keys
 // present in the body are returned, so it serves both create and PATCH.

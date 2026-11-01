@@ -5,6 +5,7 @@ import { SkeletonBlocks } from '../../../components/Skeleton';
 import { hapticSelect, hapticSuccess } from '../../../lib/haptics';
 import { useCrm } from '../CrmContext';
 import CampaignSelect from '../components/CampaignSelect';
+import ChatThread from '../components/ChatThread';
 import LeadStatusBadge from '../components/LeadStatusBadge';
 import { clientName, formatDateTime, formatPhone, fromLocalInputValue, toLocalInputValue } from '../format';
 import { CHANNELS, MANUAL_LEAD_STATUSES, t } from '../i18n';
@@ -143,6 +144,11 @@ export default function LeadDetailPage() {
                     </a>
                 )}
             </div>
+            {lead.external_ad_id && (
+                <p className="hint">
+                    {t('lead.fromAd')}: {lead.referral?.ad_title || `ad ${lead.external_ad_id}`}
+                </p>
+            )}
 
             {lead.order ? (
                 <button type="button" className="btn btn--block crm-lead-order" onClick={() => navigate(`/orders/${lead.order.id}`)}>
@@ -267,6 +273,8 @@ export default function LeadDetailPage() {
                     </div>
                 )}
             </form>
+
+            <ChatThread client={lead.client} />
 
             <h3 className="crm-section-title">{t('lead.history')}</h3>
             <ul className="crm-timeline">

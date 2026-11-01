@@ -4,6 +4,7 @@ import { runOverdueCheck } from './jobs/overdueNotifier.js';
 import { runAutoAssignChecklists } from './jobs/autoAssignChecklists.js';
 import { runDailyReportCheck } from './jobs/dailyReportNotifier.js';
 import { runCrmDailySummary } from './jobs/crmDailySummary.js';
+import { runInstagramTokenRefresh } from './jobs/instagramTokenRefresh.js';
 
 const port = process.env.PORT || 3000;
 const OVERDUE_CHECK_INTERVAL_MS = Number(process.env.OVERDUE_CHECK_INTERVAL_MS) || 5 * 60 * 1000;
@@ -74,10 +75,24 @@ function scheduleCrmDailySummary() {
     setInterval(tick, DAILY_REPORT_CHECK_INTERVAL_MS);
 }
 
+function scheduleInstagramTokenRefresh() {
+    if (!process.env.CRM_ENCRYPTION_KEY) return;
+    const tick = () => {
+        runInstagramTokenRefresh()
+            .then(({ refreshed }) => {
+                if (refreshed) console.log(`Instagram: refreshed ${refreshed} token(s)`);
+            })
+            .catch((err) => console.error('Instagram token refresh failed:', err.message));
+    };
+    tick();
+    setInterval(tick, 6 * 60 * 60 * 1000);
+}
+
 app.listen(port, () => {
     console.log(`Backend listening on port ${port}`);
     scheduleOverdueChecks();
     scheduleAutoAssignChecklists();
     scheduleDailyReportChecks();
     scheduleCrmDailySummary();
+    scheduleInstagramTokenRefresh();
 });
