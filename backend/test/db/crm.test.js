@@ -201,6 +201,89 @@ describe('payments', () => {
     });
 });
 
+describe('expenses, transfers and payouts', () => {
+    const expenseCategory = async (key) =>
+        (await one(db, 'select id from crm_expense_categories where organization_id = $1 and key = $2', [ctx.orgId, key])).id;
+
+    it('records an expense and reverses it', async () => {
+        const tx = await one(
+            db,
+            `insert into crm_transactions (organization_id, type, direction, account_id, amount, currency, fx_rate, category_id)
+             values ($1, 'expense', -1, $2, 5000000, 'UZS', 1, $3) returning *`,
+            [ctx.orgId, ctx.account['Наличные UZS'], await expenseCategory('rent')]
+        );
+        const rev = await one(db, 'select * from crm_reverse_transaction($1, null, $2)', [tx.id, 'ошибка']);
+        expect(rev.direction).toBe(1);
+        expect(rev.category_id).toBe(tx.category_id);
+    });
+
+    it('rejects an expense without a category or with the wrong direction', async () => {
+        await expect(
+            db.query(
+                `insert into crm_transactions (organization_id, type, direction, account_id, amount, currency, fx_rate)
+                 values ($1, 'expense', -1, $2, 1, 'UZS', 1)`,
+                [ctx.orgId, ctx.account['Наличные UZS']]
+            )
+        ).rejects.toThrow();
+        await expect(
+            db.query(
+                `insert into crm_transactions (organization_id, type, direction, account_id, amount, currency, fx_rate, category_id)
+                 values ($1, 'expense', 1, $2, 1, 'UZS', 1, $3)`,
+                [ctx.orgId, ctx.account['Наличные UZS'], await expenseCategory('rent')]
+            )
+        ).rejects.toThrow(/wrong direction/);
+    });
+
+    it('rejects money in a currency different from the account', async () => {
+        await expect(
+            db.query(
+                `insert into crm_transactions (organization_id, type, direction, account_id, amount, currency, fx_rate, category_id)
+                 values ($1, 'expense', -1, $2, 10, 'USD', 12800, $3)`,
+                [ctx.orgId, ctx.account['Наличные UZS'], await expenseCategory('rent')]
+            )
+        ).rejects.toThrow(/не совпадает с валютой кассы/);
+    });
+
+    it('exchanges currency between accounts in one statement and reverses both legs together', async () => {
+        const { rows } = await db.query(
+            `insert into crm_transactions (organization_id, type, direction, account_id, amount, currency, fx_rate, transfer_group_id) values
+             ($1, 'transfer_out', -1, $2, 500, 'USD', 12800, '11111111-1111-1111-1111-111111111111'),
+             ($1, 'transfer_in', 1, $3, 6400000, 'UZS', 1, '11111111-1111-1111-1111-111111111111')
+             returning id`,
+            [ctx.orgId, ctx.account['Наличные USD'], ctx.account['Наличные UZS']]
+        );
+        await db.query('select crm_reverse_transaction($1)', [rows[0].id]);
+        const { rows: reversals } = await db.query(
+            "select type from crm_transactions where transfer_group_id = '11111111-1111-1111-1111-111111111111' and reversal_of is not null order by type"
+        );
+        expect(reversals.map((r) => r.type)).toEqual(['transfer_in', 'transfer_out']);
+    });
+
+    it('pays out salary and allows only one reversal of a payroll entry', async () => {
+        const staff = await one(db, "insert into crm_staff (organization_id, full_name) values ($1, 'Кассир') returning id", [ctx.orgId]);
+        const entry = await one(
+            db,
+            "insert into crm_payroll_entries (organization_id, staff_id, kind, amount, period_month) values ($1, $2, 'salary', 3000000, '2026-10-01') returning id",
+            [ctx.orgId, staff.id]
+        );
+        await db.query(
+            `insert into crm_transactions (organization_id, type, direction, account_id, amount, currency, fx_rate, staff_id)
+             values ($1, 'payroll_payout', -1, $2, 1000000, 'UZS', 1, $3)`,
+            [ctx.orgId, ctx.account['Наличные UZS'], staff.id]
+        );
+        const reverse = () =>
+            db.query(
+                "insert into crm_payroll_entries (organization_id, staff_id, kind, amount, reversal_of) values ($1, $2, 'salary', -3000000, $3)",
+                [ctx.orgId, staff.id, entry.id]
+            );
+        await reverse();
+        await expect(reverse()).rejects.toThrow(/unique/);
+        await expect(
+            db.query("insert into crm_payroll_entries (organization_id, staff_id, kind, amount, period_month) values ($1, $2, 'salary', 1, '2026-10-15')", [ctx.orgId, staff.id])
+        ).rejects.toThrow();
+    });
+});
+
 describe('issuing an order', () => {
     it('recognizes revenue, costs and per-master commissions by the most specific rule', async () => {
         const alisher = await addStaff('Алишер');

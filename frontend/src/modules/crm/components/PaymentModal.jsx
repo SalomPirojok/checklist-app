@@ -7,15 +7,15 @@ import { useFxRate } from './useFxRate';
 
 // Payment from the client (kind 'payment') or refund to them ('refund').
 export default function PaymentModal({ order, kind, onSave, onClose }) {
-    const { reference } = useCrm();
+    const { activeAccounts } = useCrm();
     const due = Number(order.total) - Number(order.paid_amount);
     const defaultAccount =
-        reference.accounts.find((a) => a.currency === order.currency && a.kind === 'cash') ||
-        reference.accounts.find((a) => a.currency === order.currency) ||
-        reference.accounts[0];
+        activeAccounts.find((a) => a.currency === order.currency && a.kind === 'cash') ||
+        activeAccounts.find((a) => a.currency === order.currency) ||
+        activeAccounts[0];
 
     const [accountId, setAccountId] = useState(defaultAccount?.id || '');
-    const account = reference.accounts.find((a) => a.id === accountId);
+    const account = activeAccounts.find((a) => a.id === accountId);
     const sameCurrency = account?.currency === order.currency;
     const [amount, setAmount] = useState(kind === 'payment' && sameCurrency && due > 0 ? String(due) : '');
     const [note, setNote] = useState('');
@@ -57,7 +57,7 @@ export default function PaymentModal({ order, kind, onSave, onClose }) {
                 <label className="field">
                     <span>{t('payment.account')}</span>
                     <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-                        {reference.accounts.map((a) => (
+                        {activeAccounts.map((a) => (
                             <option key={a.id} value={a.id}>
                                 {a.name}
                             </option>

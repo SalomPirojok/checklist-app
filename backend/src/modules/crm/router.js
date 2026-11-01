@@ -9,6 +9,8 @@ import accessRouter from './routes/access.js';
 import staffRouter from './routes/staff.js';
 import vehiclesRouter from './routes/vehicles.js';
 import ordersRouter from './routes/orders.js';
+import financeRouter from './routes/finance.js';
+import payrollRouter from './routes/payroll.js';
 
 // Every /api/crm route: signed in, CRM enabled for the organization, and the
 // user holds a CRM role (the owner always does). Finer checks live per route.
@@ -27,5 +29,7 @@ router.use('/access', accessRouter);
 router.use('/staff', staffRouter);
 router.use('/vehicles', vehiclesRouter);
 router.use('/orders', ordersRouter);
+router.use('/finance', financeRouter);
+router.use('/payroll', payrollRouter);
 
 export default router;

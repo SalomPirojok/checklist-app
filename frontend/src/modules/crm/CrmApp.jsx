@@ -21,6 +21,12 @@ import OrderDetailPage from './pages/OrderDetailPage';
 import StaffPage from './pages/StaffPage';
 import StaffFormPage from './pages/StaffFormPage';
 import AccessPage from './pages/AccessPage';
+import FinancePage from './pages/FinancePage';
+import FinanceJournalPage from './pages/FinanceJournalPage';
+import FinanceSettingsPage from './pages/FinanceSettingsPage';
+import PayrollPage from './pages/PayrollPage';
+import PayrollStaffPage from './pages/PayrollStaffPage';
+import CommissionRulesPage from './pages/CommissionRulesPage';
 import { t } from './i18n';
 import './crm.css';
 
@@ -57,6 +63,10 @@ export default function CrmApp() {
         <Navigate to="/orders" replace />
     ) : canSeeClients ? (
         <Navigate to="/clients" replace />
+    ) : can('finance.view') ? (
+        <Navigate to="/finance" replace />
+    ) : can('payroll.view') ? (
+        <Navigate to="/payroll" replace />
     ) : (
         <div className="page crm-placeholder">
             <p className="hint">{t('home.comingSoon')}</p>
@@ -85,6 +95,12 @@ export default function CrmApp() {
                         {can('staff.manage') && <Route path="/staff" element={<StaffPage />} />}
                         {can('staff.manage') && <Route path="/staff/new" element={<StaffFormPage />} />}
                         {can('staff.manage') && <Route path="/staff/:id" element={<StaffFormPage />} />}
+                        {can('finance.view') && <Route path="/finance" element={<FinancePage />} />}
+                        {can('finance.view') && <Route path="/finance/journal" element={<FinanceJournalPage />} />}
+                        {can('finance.manage') && <Route path="/finance/settings" element={<FinanceSettingsPage />} />}
+                        {can('payroll.view') && <Route path="/payroll" element={<PayrollPage />} />}
+                        {can('payroll.view') && <Route path="/payroll/rules" element={<CommissionRulesPage />} />}
+                        {can('payroll.view') && <Route path="/payroll/:staffId" element={<PayrollStaffPage />} />}
                         {can('settings.manage') && <Route path="/access" element={<AccessPage />} />}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>

@@ -497,6 +497,42 @@
     cursor: pointer;
 }
 
+.crm-actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.crm-actions-row--footer {
+    margin-top: var(--space-5);
+}
+
+.crm-totals__sub {
+    padding-left: var(--space-3);
+}
+
+.crm-income {
+    color: var(--status-good);
+}
+
+.crm-owed-total {
+    font-weight: 600;
+    margin: 0 0 var(--space-3);
+}
+
+/* Money values are long ("12 800 000 сум"): smaller than the checklist KPIs. */
+.crm-kpis .stat-tile__value {
+    font-size: var(--font-size-lg);
+    overflow-wrap: anywhere;
+}
+
+@media (min-width: 900px) {
+    .crm-kpis {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
 .crm-placeholder {
     text-align: center;
     padding: var(--space-6) var(--space-4);

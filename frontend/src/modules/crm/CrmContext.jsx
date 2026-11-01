@@ -17,6 +17,7 @@ export function CrmProvider({ access, reference, reloadReference, children }) {
             // Active people only, for "assign to" dropdowns.
             assignableUsers: reference.users.filter((u) => u.is_active),
             activeStaff: reference.staff.filter((s) => s.is_active),
+            activeAccounts: reference.accounts.filter((a) => !a.is_archived),
             userName: (id) => userMap.get(id)?.full_name || null,
             sourceName: (id) => sourceMap.get(id)?.name || null,
             staffName: (id) => staffMap.get(id)?.full_name || null,

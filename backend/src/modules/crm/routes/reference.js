@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
         supabase.from('crm_campaigns').select('id, source_id, name').eq('organization_id', orgId).eq('is_archived', false).order('created_at', { ascending: false }),
         supabase.from('crm_service_categories').select('id, key, name').eq('organization_id', orgId).eq('is_archived', false).order('sort_order'),
         supabase.from('users').select('id, full_name, role, is_active').eq('organization_id', orgId).order('full_name'),
-        supabase.from('crm_accounts').select('id, name, kind, currency').eq('organization_id', orgId).eq('is_archived', false).order('created_at'),
+        supabase.from('crm_accounts').select('id, name, kind, currency, is_archived').eq('organization_id', orgId).order('created_at'),
         supabase.from('crm_staff').select('id, full_name, specialization, is_active').eq('organization_id', orgId).order('full_name'),
     ]);
     const failed = [sources, campaigns, categories, users, accounts, staff].find((r) => r.error);
